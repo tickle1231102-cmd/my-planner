@@ -8,9 +8,11 @@ import {
 } from 'react'
 import WeeklyView, { getMondayOfWeek } from './WeeklyView.jsx'
 import YearOverviewCalendar from './YearOverviewCalendar.jsx'
+import HabitTracker from './HabitTracker.jsx'
 import UserKeyGate from './components/UserKeyGate.jsx'
 import SupabaseSetup from './components/SupabaseSetup.jsx'
 import { CalendarIcon } from './components/CalendarIcon.jsx'
+import { AppNavMenu } from './components/AppNavMenu.jsx'
 import { useCloudSync } from './context/CloudSyncContext.jsx'
 import { DEFAULT_COLUMNS } from './lib/plannerStorage.js'
 import { formatDateDayOnly, formatDateLabel } from './lib/dateFormat.js'
@@ -42,6 +44,15 @@ const DATE_COLOR_CELL = Object.fromEntries(
   DATE_COLOR_OPTIONS.map((option) => [option.id, option.cell]),
 )
 const SATURDAY_DIVIDER = 'border-l-2 border-planner-sage/80'
+
+function PlaceholderPage({ title }) {
+  return (
+    <div className="flex min-h-[50vh] flex-col items-center justify-center rounded-2xl border border-planner-sand bg-white p-8 text-center shadow-soft">
+      <h2 className="text-lg font-medium text-planner-ink">{title}</h2>
+      <p className="mt-2 text-sm text-planner-ink-muted">준비 중입니다.</p>
+    </div>
+  )
+}
 
 function pad(n) {
   return String(n).padStart(2, '0')
@@ -659,8 +670,7 @@ function PlannerGrid({
                   <textarea
                     value={weekData[week.id]?.[col.id] || ''}
                     onChange={(e) => updateCell(week.id, col.id, e.target.value)}
-                    placeholder={`${col.label}`}
-                    className="h-full w-full bg-transparent px-2 py-1 text-xs leading-snug text-planner-ink placeholder:text-planner-ink-muted/40 transition focus:bg-white/80 focus:outline-none focus:ring-1 focus:ring-inset focus:ring-planner-sage-muted/40"
+                    className="h-full w-full bg-transparent px-2 py-1 text-xs leading-snug text-planner-ink transition focus:bg-white/80 focus:outline-none focus:ring-1 focus:ring-inset focus:ring-planner-sage-muted/40"
                     rows={1}
                   />
                 </div>
@@ -809,8 +819,7 @@ function MobileNotes({
                   <textarea
                     value={weekData[week.id]?.[col.id] || ''}
                     onChange={(e) => updateCell(week.id, col.id, e.target.value)}
-                    placeholder={`${col.label}`}
-                    className="h-full w-full bg-transparent px-2 py-1 text-xs leading-snug text-planner-ink placeholder:text-planner-ink-muted/40 focus:bg-white/80 focus:outline-none"
+                    className="h-full w-full bg-transparent px-2 py-1 text-xs leading-snug text-planner-ink focus:bg-white/80 focus:outline-none"
                     rows={1}
                   />
                 </div>
@@ -933,9 +942,28 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
     setView((current) => (current === 'yearOverview' ? 'annual' : 'yearOverview'))
   }, [])
 
-  const backToAnnual = useCallback(() => {
-    setView('annual')
-  }, [])
+  const navigateToAppView = useCallback((target) => {
+    setColorMenu(null)
+    if (target === 'yearly') {
+      setSelectedWeekMonday(null)
+      setView('annual')
+      return
+    }
+    if (target === 'weekly') {
+      const monday =
+        view === 'weekly' && selectedWeekMonday
+          ? selectedWeekMonday
+          : getMondayOfWeek(today)
+      const weekYear = monday.getFullYear()
+      if (AVAILABLE_YEARS.includes(weekYear) && weekYear !== year) {
+        setYear(weekYear)
+      }
+      setSelectedWeekMonday(monday)
+      setView('weekly')
+      return
+    }
+    setView(target)
+  }, [today, year, view, selectedWeekMonday])
 
   const changeYear = useCallback((nextYear) => {
     hasScrolledRef.current = false
@@ -948,6 +976,9 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
       setSelectedWeekMonday(null)
     }
     if (view === 'yearOverview') {
+      setView('annual')
+    }
+    if (view === 'mandala' || view === 'habit') {
       setView('annual')
     }
 
@@ -988,6 +1019,23 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
   }, [weeks, mobileTab, view, year, today, todayScrollTick])
 
   const showTodayButton = AVAILABLE_YEARS.includes(today.getFullYear())
+  const isPlannerView = view === 'annual' || view === 'yearOverview'
+  const activeNavItem =
+    view === 'weekly'
+      ? 'weekly'
+      : view === 'mandala'
+        ? 'mandala'
+        : view === 'habit'
+          ? 'habit'
+          : 'yearly'
+  const headerTitle =
+    view === 'mandala' ? '만다라트' : view === 'habit' ? 'Habit Tracker' : '연간 플래너'
+  const headerSubtitle =
+    view === 'mandala' || view === 'habit'
+      ? '한 달 습관을 주차별로 추적하세요'
+      : view === 'yearOverview'
+        ? '12개월 연간 캘린더 · 날짜를 누르면 주간 플래너로 이동합니다'
+        : '날짜를 눌러 주간 플래너로 이동하세요'
 
   useEffect(() => {
     if (view !== 'annual' || year === today.getFullYear()) return
@@ -999,11 +1047,12 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
       <div className="flex h-svh flex-col">
         <WeeklyView
           weekMonday={selectedWeekMonday}
-          onBack={backToAnnual}
           onWeekChange={changeWeek}
           today={today}
           monthGoals={monthGoals}
           onUpdateMonthGoal={updateMonthGoal}
+          activeNavItem={activeNavItem}
+          onNavigate={navigateToAppView}
         />
       </div>
     )
@@ -1029,29 +1078,28 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
         <div className="mx-auto flex max-w-[1600px] items-center justify-between px-4 py-3 sm:px-6">
           <div>
             <div className="flex items-center gap-2">
+              <AppNavMenu activeItem={activeNavItem} onNavigate={navigateToAppView} />
               <h1 className="text-lg font-medium tracking-tight text-planner-ink sm:text-xl">
-                연간 플래너
+                {headerTitle}
               </h1>
-              <button
-                type="button"
-                onClick={toggleYearOverview}
-                aria-label={view === 'yearOverview' ? '플래너 보기' : '연간 캘린더 보기'}
-                aria-pressed={view === 'yearOverview'}
-                className={[
-                  'rounded-lg p-1.5 transition',
-                  view === 'yearOverview'
-                    ? 'bg-planner-sage text-white'
-                    : 'text-planner-sage hover:bg-planner-sage-light',
-                ].join(' ')}
-              >
-                <CalendarIcon className="size-5" />
-              </button>
+              {isPlannerView && (
+                <button
+                  type="button"
+                  onClick={toggleYearOverview}
+                  aria-label={view === 'yearOverview' ? '플래너 보기' : '연간 캘린더 보기'}
+                  aria-pressed={view === 'yearOverview'}
+                  className={[
+                    'rounded-lg p-1.5 transition',
+                    view === 'yearOverview'
+                      ? 'bg-planner-sage text-white'
+                      : 'text-planner-sage hover:bg-planner-sage-light',
+                  ].join(' ')}
+                >
+                  <CalendarIcon className="size-5" />
+                </button>
+              )}
             </div>
-            <p className="text-xs text-planner-ink-muted sm:text-sm">
-              {view === 'yearOverview'
-                ? '12개월 연간 캘린더 · 날짜를 누르면 주간 플래너로 이동합니다'
-                : '날짜를 눌러 주간 플래너로 이동하세요'}
-            </p>
+            <p className="text-xs text-planner-ink-muted sm:text-sm">{headerSubtitle}</p>
             <p className="mt-0.5 text-[11px] text-planner-sage">
               {nickname || userKey}
               {localOnly
@@ -1069,7 +1117,7 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
             >
               ID 변경
             </button>
-            {showTodayButton && (
+            {showTodayButton && isPlannerView && (
               <button
                 type="button"
                 onClick={goToToday}
@@ -1080,8 +1128,8 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
             )}
           </div>
         </div>
-        <YearNavigator year={year} onChange={changeYear} />
-        {view !== 'yearOverview' && (
+        {isPlannerView && <YearNavigator year={year} onChange={changeYear} />}
+        {view === 'annual' && (
           <MobileTabBar active={mobileTab} onChange={setMobileTab} />
         )}
       </header>
@@ -1106,6 +1154,10 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
                 updateYearGoal(year, goalId, updates)
               }
             />
+          ) : view === 'mandala' ? (
+            <PlaceholderPage title="만다라트" />
+          ) : view === 'habit' ? (
+            <HabitTracker today={today} />
           ) : (
             <>
           <div className="hidden overflow-hidden rounded-2xl border border-planner-sand bg-white shadow-soft lg:block">

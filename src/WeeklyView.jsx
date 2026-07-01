@@ -4,6 +4,7 @@ import { formatDateWithWeekday, formatWeekRange } from './lib/dateFormat.js'
 import { getDominantMonthAndYear } from './lib/monthGoals.js'
 import { padMonthGoals, padWeekGoals } from './lib/goalLists.js'
 import MonthGoalChecklist from './components/MonthGoalChecklist.jsx'
+import { AppNavMenu } from './components/AppNavMenu.jsx'
 
 const WEEKLY_STORAGE_KEY = 'weekly-planner-v2'
 const DAY_LABELS = ['월', '화', '수', '목', '금', '토', '일']
@@ -685,11 +686,12 @@ function shiftWeekMonday(monday, weeks) {
 
 export default function WeeklyView({
   weekMonday,
-  onBack,
   onWeekChange,
   today,
   monthGoals,
   onUpdateMonthGoal,
+  activeNavItem,
+  onNavigate,
 }) {
   const weekId = useMemo(() => getWeekIdFromMonday(weekMonday), [weekMonday])
   const days = useMemo(() => getWeekDays(weekMonday), [weekMonday])
@@ -733,13 +735,7 @@ export default function WeeklyView({
   return (
     <div className="flex h-full flex-col bg-planner-cream">
       <div className="flex shrink-0 items-center justify-between border-b border-planner-sand bg-white px-3 py-2 sm:px-4">
-        <button
-          type="button"
-          onClick={onBack}
-          className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-planner-sage transition hover:bg-planner-sage-light sm:text-sm"
-        >
-          ← 연간 보기
-        </button>
+        <AppNavMenu activeItem={activeNavItem} onNavigate={onNavigate} />
         <div className="flex min-w-0 flex-1 items-center justify-center gap-2 px-2">
           <button
             type="button"
