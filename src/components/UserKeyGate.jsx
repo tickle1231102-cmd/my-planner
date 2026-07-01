@@ -77,7 +77,12 @@ export default function UserKeyGate({
 
       setLocalError('고유 ID 형식이 올바르지 않습니다')
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '연결 실패'
+      const msg =
+        err instanceof Error
+          ? err.message
+          : typeof err === 'string'
+            ? err
+            : '연결에 실패했습니다'
       setLocalError(msg)
       if (msg.includes('DB 테이블')) setShowDbHelp(true)
     }
@@ -116,7 +121,12 @@ export default function UserKeyGate({
         await onSetLegacyPassword(userKey, password, nickname)
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '연결 실패'
+      const msg =
+        err instanceof Error
+          ? err.message
+          : typeof err === 'string'
+            ? err
+            : '연결에 실패했습니다'
       setLocalError(msg)
       if (msg.includes('DB 테이블')) setShowDbHelp(true)
     }

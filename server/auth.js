@@ -1,12 +1,9 @@
 import { getAdminClient } from './supabaseAdmin.js'
 import { isValidUserKey, normalizeUserKey } from './cloudData.js'
+import { userKeyToAuthEmail } from '../src/lib/authEmail.js'
 
-export const AUTH_EMAIL_SUFFIX = '@planner.local'
+export { userKeyToAuthEmail } from '../src/lib/authEmail.js'
 export const MIN_PASSWORD_LENGTH = 8
-
-export function userKeyToAuthEmail(userKey) {
-  return `${normalizeUserKey(userKey)}${AUTH_EMAIL_SUFFIX}`
-}
 
 function isValidPassword(password) {
   return typeof password === 'string' && password.length >= MIN_PASSWORD_LENGTH
@@ -139,7 +136,10 @@ export async function handleAuthRegister(body = {}) {
       return { status: 409, body: { error: 'already registered' } }
     }
 
-    const message = error instanceof Error ? error.message : 'register failed'
+    const message =
+      error?.message ||
+      error?.msg ||
+      (typeof error === 'string' ? error : 'register failed')
     return { status: 500, body: { error: message } }
   }
 }

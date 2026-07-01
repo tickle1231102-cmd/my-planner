@@ -1,12 +1,8 @@
 import { getClient } from './supabaseBrowser.js'
+import { userKeyToAuthEmail } from './authEmail.js'
 import { isValidUserKey, normalizeUserKey } from './userIdentity.js'
 
-const AUTH_EMAIL_SUFFIX = '@planner.local'
 export const MIN_PASSWORD_LENGTH = 8
-
-export function userKeyToAuthEmail(userKey) {
-  return `${normalizeUserKey(userKey)}${AUTH_EMAIL_SUFFIX}`
-}
 
 export function isValidPassword(password) {
   return typeof password === 'string' && password.length >= MIN_PASSWORD_LENGTH
@@ -25,7 +21,9 @@ export async function getUserKeyAuthStatus(userKey) {
     p_user_key: key,
   })
 
-  if (error) throw error
+  if (error) {
+    throw new Error(error.message || '계정 상태를 확인하지 못했습니다')
+  }
   return data
 }
 
@@ -43,6 +41,9 @@ function mapAuthError(error) {
   }
   if (msg.includes('rate limit') || msg.includes('email rate limit')) {
     return '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.'
+  }
+  if (msg.includes('invalid') && msg.toLowerCase().includes('email')) {
+    return '계정 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.'
   }
   if (msg.toLowerCase().includes('password')) {
     return getPasswordHint()
