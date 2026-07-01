@@ -5,7 +5,7 @@ import { getDominantMonthAndYear } from './lib/monthGoals.js'
 import { padMonthGoals, padWeekGoals } from './lib/goalLists.js'
 import MonthGoalChecklist from './components/MonthGoalChecklist.jsx'
 import { AppNavMenu } from './components/AppNavMenu.jsx'
-import WeeklyHabitStrip from './components/WeeklyHabitStrip.jsx'
+import WeeklyHabitStrip, { MOBILE_RAIL_WIDTH_CLASS } from './components/WeeklyHabitStrip.jsx'
 
 const WEEKLY_STORAGE_KEY = 'weekly-planner-v2'
 const DAY_LABELS = ['월', '화', '수', '목', '금', '토', '일']
@@ -24,6 +24,7 @@ const HOUR_LABEL_WIDTH = 'w-6'
 const DAY_COLUMN_MIN_WIDTH = 'min-w-[84px]'
 const SIDEBAR_WIDTH = 'lg:w-[252px]'
 const TODO_TASK_COUNT = Math.floor(DAY_TASK_LINES / 2)
+const MOBILE_DAY_NOTE_HEIGHT = 52
 
 function getWeekOfMonth(date) {
   const first = new Date(date.getFullYear(), date.getMonth(), 1)
@@ -323,9 +324,16 @@ function useWeeklyStorage(weekId) {
   return { weekData, setWeekGoal, setMemo, setDayNote, setDayTask, setSlotFilled }
 }
 
-function SectionHeader({ children }) {
+function SectionHeader({ children, compact = false }) {
   return (
-    <div className="border-b border-planner-sage/30 bg-planner-sage px-2 py-1.5 text-center text-[10px] font-semibold tracking-[0.2em] text-white">
+    <div
+      className={[
+        'border-b border-planner-sage/30 bg-planner-sage text-center font-semibold text-white',
+        compact
+          ? 'px-1 py-1 text-[8px] tracking-[0.12em]'
+          : 'px-2 py-1.5 text-[10px] tracking-[0.2em]',
+      ].join(' ')}
+    >
       {children}
     </div>
   )
@@ -438,17 +446,31 @@ function TaskList({ tasks, onText, onToggle, inputRefs, startIndex = 0 }) {
   )
 }
 
-function DayTasksPanel({ dayIdx, tasks, dayNote, setDayTask, setDayNote, showLabel }) {
+function DayTasksPanel({
+  dayIdx,
+  tasks,
+  dayNote,
+  setDayTask,
+  setDayNote,
+  showLabel,
+  scrollable = false,
+  compact = false,
+}) {
   const inputRefs = useRef([])
   const todoTasks = tasks.slice(0, TODO_TASK_COUNT)
   const notTodoTasks = tasks.slice(TODO_TASK_COUNT)
+  const noteHeight = compact ? MOBILE_DAY_NOTE_HEIGHT : DAY_NOTE_HEIGHT
 
   return (
-    <div className="flex h-full flex-col bg-white">
+    <div className={['flex flex-col bg-white', scrollable ? 'min-h-0 flex-1' : 'h-full'].join(' ')}>
       {showLabel && (
         <p
-          className="flex shrink-0 items-center border-b border-planner-sand/70 bg-planner-warm/50 px-2 text-[9px] font-medium tracking-[0.1em] text-planner-ink-muted/70"
-          style={{ height: TASK_HEADER_HEIGHT }}
+          className={[
+            'flex shrink-0 items-center border-b border-planner-sand/70 bg-planner-warm/50 text-planner-ink-muted/70',
+            compact ? 'px-1.5 text-[8px] tracking-[0.08em]' : 'px-2 text-[9px] tracking-[0.1em]',
+            'font-medium',
+          ].join(' ')}
+          style={{ height: compact ? 22 : TASK_HEADER_HEIGHT }}
         >
           To do list
         </p>
@@ -457,10 +479,19 @@ function DayTasksPanel({ dayIdx, tasks, dayNote, setDayTask, setDayNote, showLab
         value={dayNote}
         onChange={(e) => setDayNote(dayIdx, e.target.value)}
         placeholder="메모"
-        className="w-full shrink-0 resize-none border-b border-planner-sand/70 bg-white px-2 py-1.5 text-[11px] leading-relaxed text-planner-ink placeholder:text-planner-ink-muted/40 focus:outline-none"
-        style={{ height: DAY_NOTE_HEIGHT }}
+        className={[
+          'w-full shrink-0 resize-none border-b border-planner-sand/70 bg-white text-planner-ink placeholder:text-planner-ink-muted/40 focus:outline-none',
+          compact ? 'px-1.5 py-1 text-[10px] leading-snug' : 'px-2 py-1.5 text-[11px] leading-relaxed',
+        ].join(' ')}
+        style={{ height: noteHeight }}
       />
-      <div className="min-h-0 flex-1 overflow-hidden">
+      <div
+        className={
+          scrollable
+            ? 'scrollbar-thin min-h-0 flex-1 overflow-y-auto'
+            : 'min-h-0 flex-1 overflow-hidden'
+        }
+      >
         <TaskList
           tasks={todoTasks}
           inputRefs={inputRefs}
@@ -469,8 +500,12 @@ function DayTasksPanel({ dayIdx, tasks, dayNote, setDayTask, setDayNote, showLab
           onToggle={(taskId, updates) => setDayTask(dayIdx, taskId, updates)}
         />
         <p
-          className="flex shrink-0 items-center border-y border-planner-sand/70 bg-planner-warm/50 px-2 text-[9px] font-medium tracking-[0.1em] text-planner-ink-muted/70"
-          style={{ height: NOT_TODO_HEADER_HEIGHT }}
+          className={[
+            'flex shrink-0 items-center border-y border-planner-sand/70 bg-planner-warm/50 text-planner-ink-muted/70',
+            compact ? 'px-1.5 text-[8px] tracking-[0.08em]' : 'px-2 text-[9px] tracking-[0.1em]',
+            'font-medium',
+          ].join(' ')}
+          style={{ height: compact ? 20 : NOT_TODO_HEADER_HEIGHT }}
         >
           Not to do list
         </p>
@@ -592,7 +627,7 @@ const tasksPanelHeight =
   NOT_TODO_HEADER_HEIGHT +
   DAY_TASK_LINES * TASK_ROW_HEIGHT
 
-function MobileDayPlanner({
+function MobileDayColumn({
   dayIdx,
   days,
   today,
@@ -605,21 +640,18 @@ function MobileDayPlanner({
   const isToday = isSameDay(date, today)
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div className="flex h-full min-w-full shrink-0 snap-start flex-col overflow-hidden">
       <div
         className={[
-          'shrink-0 border-b border-planner-sage/30 py-1.5 text-center text-[16.5px] font-semibold tracking-wider',
+          'shrink-0 border-b border-planner-sage/30 py-1 text-center text-[13px] font-semibold tracking-wide',
           isToday ? 'bg-planner-today text-planner-ink' : 'bg-planner-sage text-white',
         ].join(' ')}
       >
         {formatDateWithWeekday(date, DAY_LABELS[dayIdx])}
       </div>
 
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        <div
-          className="flex w-[42%] shrink-0 flex-col border-r border-planner-sand bg-white"
-          style={{ height: tasksPanelHeight }}
-        >
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="flex min-h-0 max-h-[48%] flex-col border-b border-planner-sand">
           <DayTasksPanel
             dayIdx={dayIdx}
             tasks={weekData.dayTasks[dayIdx]}
@@ -627,32 +659,149 @@ function MobileDayPlanner({
             setDayTask={setDayTask}
             setDayNote={setDayNote}
             showLabel
+            scrollable
+            compact
           />
         </div>
 
-        <div
-          className="flex min-w-0 flex-1 flex-col overflow-hidden"
-          style={{ height: tasksPanelHeight }}
-        >
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
           <p
-            className="flex shrink-0 items-center border-b border-planner-sand bg-white px-2 text-[9px] font-medium tracking-[0.25em] text-planner-ink-muted/55"
-            style={{ height: TASK_HEADER_HEIGHT }}
+            className="flex h-[22px] shrink-0 items-center border-b border-planner-sand/70 bg-planner-warm/50 px-2 text-[8px] font-medium tracking-[0.12em] text-planner-ink-muted/70"
           >
             TIMETABLE
           </p>
-          <div className="scrollbar-thin min-h-0 flex-1 overflow-auto">
-            <div className="min-w-[240px]">
-              <DayTimetableColumn
-                dayIdx={dayIdx}
-                filledSlots={weekData.filledSlots}
-                startPaint={startPaint}
-                showHourLabels
-              />
-            </div>
+          <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto">
+            <DayTimetableColumn
+              dayIdx={dayIdx}
+              filledSlots={weekData.filledSlots}
+              startPaint={startPaint}
+              showHourLabels
+            />
           </div>
         </div>
       </div>
     </div>
+  )
+}
+
+function MobileWeekScroller({
+  days,
+  today,
+  weekData,
+  setDayTask,
+  setDayNote,
+  startPaint,
+}) {
+  const scrollRef = useRef(null)
+
+  useEffect(() => {
+    const todayIdx = days.findIndex((day) => isSameDay(day, today))
+    if (todayIdx < 0 || !scrollRef.current) return
+
+    const column = scrollRef.current.children[todayIdx]
+    column?.scrollIntoView({ inline: 'start', block: 'nearest' })
+  }, [days, today])
+
+  return (
+    <div
+      ref={scrollRef}
+      className="scrollbar-thin flex h-full snap-x snap-mandatory overflow-x-auto overflow-y-hidden"
+    >
+      {days.map((_, dayIdx) => (
+        <MobileDayColumn
+          key={dayIdx}
+          dayIdx={dayIdx}
+          days={days}
+          today={today}
+          weekData={weekData}
+          setDayTask={setDayTask}
+          setDayNote={setDayNote}
+          startPaint={startPaint}
+        />
+      ))}
+    </div>
+  )
+}
+
+function WeeklySidebarContent({
+  compact,
+  weekLabel,
+  goalMonth,
+  syncedMonthGoals,
+  weekGoals,
+  handleMonthGoalUpdate,
+  handleWeekGoalUpdate,
+  days,
+  memo,
+  setMemo,
+}) {
+  return (
+    <>
+      {weekLabel && (
+        <div
+          className={[
+            'border-b border-planner-sand bg-planner-warm/60',
+            compact ? 'px-1.5 py-1.5' : 'hidden px-3 py-2.5 lg:block',
+          ].join(' ')}
+        >
+          <p
+            className={[
+              'text-center font-medium text-planner-ink',
+              compact ? 'text-[10px] leading-tight' : 'text-sm',
+            ].join(' ')}
+          >
+            {weekLabel}
+          </p>
+        </div>
+      )}
+
+      <SectionHeader compact={compact}>GOAL</SectionHeader>
+      <div className={compact ? 'bg-white px-1 py-1' : 'bg-white p-2'}>
+        <p
+          className={[
+            'text-planner-ink-muted/70',
+            compact ? 'mb-1 text-[8px] leading-tight' : 'mb-1.5 text-[10px]',
+          ].join(' ')}
+        >
+          {goalMonth + 1}월 월간
+        </p>
+        <MonthGoalChecklist
+          goals={syncedMonthGoals}
+          placeholder="월간 목표"
+          compact={compact}
+          onUpdateGoal={handleMonthGoalUpdate}
+        />
+        <p
+          className={[
+            'text-planner-ink-muted/70',
+            compact ? 'mb-1 mt-2 text-[8px] leading-tight' : 'mb-1.5 mt-3 text-[10px]',
+          ].join(' ')}
+        >
+          주간 목표
+        </p>
+        <MonthGoalChecklist
+          goals={weekGoals}
+          placeholder="주간 목표"
+          compact={compact}
+          onUpdateGoal={handleWeekGoalUpdate}
+        />
+      </div>
+
+      <WeeklyHabitStrip days={days} compact={compact} />
+
+      <SectionHeader compact={compact}>MEMO</SectionHeader>
+      <textarea
+        value={memo}
+        onChange={(e) => setMemo(e.target.value)}
+        placeholder="메모"
+        className={[
+          'w-full resize-none bg-white text-planner-ink placeholder:text-planner-ink-muted/40 focus:outline-none',
+          compact
+            ? 'min-h-[88px] flex-1 px-1.5 py-1 text-[10px] leading-snug'
+            : 'min-h-[120px] flex-1 p-2 text-xs leading-relaxed lg:min-h-[160px]',
+        ].join(' ')}
+      />
+    </>
   )
 }
 
@@ -767,13 +916,6 @@ export default function WeeklyView({
 
   const isDesktop = useIsDesktop()
 
-  const [mobileDay, setMobileDay] = useState(() => {
-    const idx = days.findIndex((d) => isSameDay(d, today))
-    return idx >= 0 ? idx : 0
-  })
-
-  const dayIndices = isDesktop ? [0, 1, 2, 3, 4, 5, 6] : [mobileDay]
-
   return (
     <div className="flex h-full flex-col bg-planner-cream">
       <div className="flex shrink-0 items-center justify-between border-b border-planner-sand bg-white px-3 py-2 sm:px-4">
@@ -803,77 +945,45 @@ export default function WeeklyView({
         <div className="hidden w-[88px] shrink-0 lg:block" />
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+      <div className="flex min-h-0 flex-1 overflow-hidden lg:flex-row">
         <aside
-          className={`flex w-full shrink-0 flex-col border-b border-planner-sand bg-white ${SIDEBAR_WIDTH} lg:border-b-0 lg:border-r`}
+          className={`hidden shrink-0 flex-col border-planner-sand bg-white ${SIDEBAR_WIDTH} lg:flex lg:border-r`}
         >
-          <div className="hidden border-b border-planner-sand bg-planner-warm/60 px-3 py-2.5 lg:block">
-            <p className="text-center text-sm font-medium text-planner-ink">{weekLabel}</p>
-          </div>
-
-          <div className="flex flex-1 flex-col">
-            <SectionHeader>GOAL</SectionHeader>
-            <div className="bg-white p-2">
-              <p className="mb-1.5 text-[10px] text-planner-ink-muted/70">
-                {goalMonth + 1}월 월간 목표
-              </p>
-              <MonthGoalChecklist
-                goals={syncedMonthGoals}
-                placeholder="월간 목표"
-                onUpdateGoal={handleMonthGoalUpdate}
-              />
-              <p className="mb-1.5 mt-3 text-[10px] text-planner-ink-muted/70">
-                주간 목표
-              </p>
-              <MonthGoalChecklist
-                goals={weekData.weekGoals}
-                placeholder="주간 목표"
-                onUpdateGoal={handleWeekGoalUpdate}
-              />
-            </div>
-
-            <WeeklyHabitStrip days={days} />
-
-            <SectionHeader>MEMO</SectionHeader>
-            <textarea
-              value={weekData.memo}
-              onChange={(e) => setMemo(e.target.value)}
-              placeholder="메모를 자유롭게 적어 보세요"
-              className="min-h-[120px] flex-1 resize-none bg-white p-2 text-xs leading-relaxed text-planner-ink placeholder:text-planner-ink-muted/40 focus:outline-none lg:min-h-[160px]"
-            />
-          </div>
+          <WeeklySidebarContent
+            weekLabel={weekLabel}
+            goalMonth={goalMonth}
+            syncedMonthGoals={syncedMonthGoals}
+            weekGoals={weekData.weekGoals}
+            handleMonthGoalUpdate={handleMonthGoalUpdate}
+            handleWeekGoalUpdate={handleWeekGoalUpdate}
+            days={days}
+            memo={weekData.memo}
+            setMemo={setMemo}
+          />
         </aside>
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="flex shrink-0 gap-0.5 overflow-x-auto border-b border-planner-sand bg-white p-1 lg:hidden">
-            {days.map((date, i) => {
-              const isToday = isSameDay(date, today)
-              const active = mobileDay === i
-              return (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => setMobileDay(i)}
-                  className={[
-                    'shrink-0 rounded-md px-2.5 py-1 text-[15px] font-medium transition',
-                    active
-                      ? 'bg-planner-sage text-white'
-                      : 'bg-planner-warm text-planner-ink-muted',
-                    isToday && !active && 'ring-1 ring-planner-today-ring',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                >
-                  {formatDateWithWeekday(date, DAY_LABELS[i])}
-                </button>
-              )
-            })}
-          </div>
+        <aside
+          className={`flex h-full min-h-0 shrink-0 flex-col overflow-y-auto border-r border-planner-sand bg-white ${MOBILE_RAIL_WIDTH_CLASS} lg:hidden`}
+        >
+          <WeeklySidebarContent
+            compact
+            weekLabel={weekLabel}
+            goalMonth={goalMonth}
+            syncedMonthGoals={syncedMonthGoals}
+            weekGoals={weekData.weekGoals}
+            handleMonthGoalUpdate={handleMonthGoalUpdate}
+            handleWeekGoalUpdate={handleWeekGoalUpdate}
+            days={days}
+            memo={weekData.memo}
+            setMemo={setMemo}
+          />
+        </aside>
 
-          <div className="scrollbar-thin min-h-0 flex-1 overflow-auto">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="scrollbar-thin min-h-0 flex-1 overflow-hidden lg:overflow-auto">
             {isDesktop ? (
               <DesktopWeekGrid
-                dayIndices={dayIndices}
+                dayIndices={[0, 1, 2, 3, 4, 5, 6]}
                 days={days}
                 today={today}
                 weekData={weekData}
@@ -882,8 +992,7 @@ export default function WeeklyView({
                 startPaint={startPaint}
               />
             ) : (
-              <MobileDayPlanner
-                dayIdx={mobileDay}
+              <MobileWeekScroller
                 days={days}
                 today={today}
                 weekData={weekData}

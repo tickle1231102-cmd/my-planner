@@ -5,13 +5,17 @@ import { getHabitCheck, getMonthData, toggleHabitCheck } from '../lib/habitStora
 
 const DAY_CIRCLE_LABELS = ['월', '화', '수', '목', '금', '토', '일']
 
-function HabitDayCircle({ label, checked, onToggle }) {
+/** 7열 habit 원형 버튼(20px) + gap + padding 기준 모바일 레일 폭 */
+export const MOBILE_RAIL_WIDTH_CLASS = 'w-[168px]'
+
+function HabitDayCircle({ label, checked, onToggle, compact }) {
   return (
     <button
       type="button"
       onClick={onToggle}
       className={[
-        'flex size-6 shrink-0 items-center justify-center rounded-full border text-[8px] font-semibold transition sm:size-7 sm:text-[9px]',
+        'flex shrink-0 items-center justify-center rounded-full border font-semibold transition',
+        compact ? 'size-5 text-[8px]' : 'size-6 text-[8px] sm:size-7 sm:text-[9px]',
         checked
           ? 'border-planner-today-ring bg-planner-today-ring text-planner-ink'
           : 'border-planner-today-ring bg-white text-planner-ink hover:bg-planner-sage-light/50',
@@ -23,7 +27,7 @@ function HabitDayCircle({ label, checked, onToggle }) {
   )
 }
 
-export default function WeeklyHabitStrip({ days }) {
+export default function WeeklyHabitStrip({ days, compact = false }) {
   const { habitData, updateHabitData } = useCloudSync()
   const { year, month } = useMemo(() => getDominantMonthAndYear(days), [days])
 
@@ -67,26 +71,46 @@ export default function WeeklyHabitStrip({ days }) {
   if (visibleHabits.length === 0) return null
 
   return (
-    <div className="border-t border-planner-sand bg-white px-3 py-2.5">
-      <div className="mb-2 text-[10px] font-medium tracking-[0.08em] text-planner-ink">
+    <div
+      className={[
+        'border-t border-planner-sand bg-white',
+        compact ? 'px-2 py-1.5' : 'px-3 py-2.5',
+      ].join(' ')}
+    >
+      <div
+        className={[
+          'font-medium text-planner-ink',
+          compact ? 'mb-1.5 text-[8px] leading-tight' : 'mb-2 text-[10px] tracking-[0.08em]',
+        ].join(' ')}
+      >
         Habit tracker
       </div>
-      <div className="space-y-2.5">
+      <div className={compact ? 'space-y-2' : 'space-y-2.5'}>
         {visibleHabits.map(({ habit, index }) => (
           <div key={habit.id}>
             <p
-              className="mb-1 truncate text-[10px] leading-tight text-planner-ink"
+              className={[
+                'leading-tight text-planner-ink',
+                compact
+                  ? 'mb-0.5 line-clamp-2 text-[8px] break-words'
+                  : 'mb-1 truncate text-[10px]',
+              ].join(' ')}
               title={habit.label}
             >
               {habit.label}
             </p>
-            <div className="flex justify-between gap-1 px-0.5">
+            <div
+              className={
+                compact ? 'flex justify-between gap-0.5' : 'flex justify-between gap-1 px-0.5'
+              }
+            >
               {days.map((date, dayIdx) => (
                 <HabitDayCircle
                   key={`${habit.id}-${dayIdx}`}
                   label={DAY_CIRCLE_LABELS[dayIdx]}
                   checked={isChecked(index, date)}
                   onToggle={() => toggle(index, date)}
+                  compact={compact}
                 />
               ))}
             </div>
