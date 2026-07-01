@@ -7,8 +7,11 @@ import {
   useState,
 } from 'react'
 import WeeklyView, { getMondayOfWeek } from './WeeklyView.jsx'
+import UserKeyGate from './components/UserKeyGate.jsx'
+import SupabaseSetup from './components/SupabaseSetup.jsx'
+import { useCloudSync } from './context/CloudSyncContext.jsx'
+import { DEFAULT_COLUMNS } from './lib/plannerStorage.js'
 
-const STORAGE_KEY = 'annual-planner-v1'
 const AVAILABLE_YEARS = [2025, 2026, 2027, 2028]
 const DAY_LABELS = ['월', '화', '수', '목', '금', '토', '일']
 const MONTH_LABELS = [
@@ -17,11 +20,6 @@ const MONTH_LABELS = [
 ]
 const HEAVENLY = ['갑', '을', '병', '정', '무', '기', '경', '신', '임', '계']
 const EARTHLY = ['자', '축', '인', '묘', '진', '사', '오', '미', '신', '유', '술', '해']
-
-const DEFAULT_COLUMNS = [
-  { id: 'schedule', label: '주요 일정' },
-  { id: 'goals', label: '목표' },
-]
 
 const ROW_MIN_HEIGHT = 36
 const MONTH_COL_WIDTH = 34
@@ -109,33 +107,24 @@ function buildMonthSpans(weeks) {
   return spans
 }
 
-function loadPlannerData() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return null
-    return JSON.parse(raw)
-  } catch {
-    return null
-  }
-}
-
 function usePlannerStorage(year) {
-  const [columns, setColumns] = useState(() => {
-    const saved = loadPlannerData()
-    return saved?.columns?.length ? saved.columns : DEFAULT_COLUMNS
-  })
+  const { ready, annualData, updateAnnual } = useCloudSync()
+  const hydratedRef = useRef(false)
 
-  const [weekData, setWeekData] = useState(() => {
-    const saved = loadPlannerData()
-    return saved?.weekData || {}
-  })
+  const [columns, setColumns] = useState(() => annualData.columns)
+  const [weekData, setWeekData] = useState(() => annualData.weekData)
 
   useEffect(() => {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ year, columns, weekData }),
-    )
-  }, [year, columns, weekData])
+    if (!ready || hydratedRef.current) return
+    setColumns(annualData.columns)
+    setWeekData(annualData.weekData)
+    hydratedRef.current = true
+  }, [ready, annualData])
+
+  useEffect(() => {
+    if (!ready || !hydratedRef.current) return
+    updateAnnual({ year, columns, weekData })
+  }, [year, columns, weekData, ready, updateAnnual])
 
   const updateCell = useCallback((weekId, columnId, value) => {
     setWeekData((prev) => ({
@@ -620,6 +609,48 @@ function MobileNotes({
 }
 
 function App() {
+  const {
+    userKey,
+    loading,
+    ready,
+    login,
+    logout,
+    syncing,
+    error,
+    nickname,
+    cloudEnabled,
+    localOnly,
+    useLocalMode,
+  } = useCloudSync()
+
+  if (loading) {
+    return (
+      <div className="flex min-h-svh items-center justify-center bg-planner-cream text-sm text-planner-ink-muted">
+        데이터 불러오는 중…
+      </div>
+    )
+  }
+
+  if (!cloudEnabled && !ready) {
+    return <SupabaseSetup onUseLocal={useLocalMode} />
+  }
+
+  if (!userKey || !ready) {
+    return <UserKeyGate onLogin={login} loading={loading} error={error} />
+  }
+
+  return (
+    <PlannerApp
+      logout={logout}
+      syncing={syncing && !localOnly}
+      userKey={userKey}
+      nickname={localOnly ? '로컬 저장' : nickname || userKey}
+      localOnly={localOnly}
+    />
+  )
+}
+
+function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
   const today = useMemo(() => {
     const d = new Date()
     d.setHours(0, 0, 0, 0)
@@ -732,16 +763,33 @@ function App() {
             <p className="text-xs text-planner-ink-muted sm:text-sm">
               날짜를 눌러 주간 플래너로 이동하세요
             </p>
+            <p className="mt-0.5 text-[11px] text-planner-sage">
+              {nickname || userKey}
+              {localOnly
+                ? ' · 이 기기에만 저장'
+                : syncing
+                  ? ' · 저장 중…'
+                  : ' · 동기화됨'}
+            </p>
           </div>
-          {showTodayButton && (
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={scrollToToday}
-              className="rounded-full border border-planner-sage-muted/50 bg-planner-sage-light px-4 py-1.5 text-xs font-medium text-planner-sage transition hover:bg-planner-sage hover:text-white sm:text-sm"
+              onClick={logout}
+              className="rounded-full border border-planner-sand px-3 py-1.5 text-[11px] font-medium text-planner-ink-muted transition hover:bg-white sm:text-xs"
             >
-              오늘로 이동
+              ID 변경
             </button>
-          )}
+            {showTodayButton && (
+              <button
+                type="button"
+                onClick={scrollToToday}
+                className="rounded-full border border-planner-sage-muted/50 bg-planner-sage-light px-4 py-1.5 text-xs font-medium text-planner-sage transition hover:bg-planner-sage hover:text-white sm:text-sm"
+              >
+                오늘로 이동
+              </button>
+            )}
+          </div>
         </div>
         <YearNavigator year={year} onChange={changeYear} />
         <MobileTabBar active={mobileTab} onChange={setMobileTab} />

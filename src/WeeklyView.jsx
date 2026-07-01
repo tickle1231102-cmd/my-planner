@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCloudSync } from './context/CloudSyncContext.jsx'
 
 const WEEKLY_STORAGE_KEY = 'weekly-planner-v2'
 const DAY_LABELS = ['월', '화', '수', '목', '금', '토', '일']
@@ -91,19 +92,6 @@ function defaultWeekData() {
     todos: createSidebarTodos(),
     dayTasks,
     filledSlots: {},
-  }
-}
-
-function loadWeeklyData() {
-  try {
-    const raw = localStorage.getItem(WEEKLY_STORAGE_KEY)
-    if (raw) return JSON.parse(raw)
-
-    const legacy = localStorage.getItem('weekly-planner-v1')
-    if (!legacy) return {}
-    return JSON.parse(legacy)
-  } catch {
-    return {}
   }
 }
 
@@ -206,29 +194,25 @@ function normalizeWeekData(raw) {
 }
 
 function useWeeklyStorage(weekId) {
-  const [allData, setAllData] = useState(loadWeeklyData)
+  const { weeklyData, updateWeekly } = useCloudSync()
 
-  const weekData = normalizeWeekData(allData[weekId])
-
-  useEffect(() => {
-    localStorage.setItem(WEEKLY_STORAGE_KEY, JSON.stringify(allData))
-  }, [allData])
+  const weekData = normalizeWeekData(weeklyData[weekId])
 
   const patchWeek = useCallback(
     (patch) => {
-      setAllData((prev) => ({
+      updateWeekly((prev) => ({
         ...prev,
         [weekId]: { ...normalizeWeekData(prev[weekId]), ...patch },
       }))
     },
-    [weekId],
+    [weekId, updateWeekly],
   )
 
   const setGoal = useCallback((goal) => patchWeek({ goal }), [patchWeek])
 
   const setSidebarTodo = useCallback(
     (todoId, updates) => {
-      setAllData((prev) => {
+      updateWeekly((prev) => {
         const current = normalizeWeekData(prev[weekId])
         return {
           ...prev,
@@ -241,12 +225,12 @@ function useWeeklyStorage(weekId) {
         }
       })
     },
-    [weekId],
+    [weekId, updateWeekly],
   )
 
   const setDayTask = useCallback(
     (dayIdx, taskId, updates) => {
-      setAllData((prev) => {
+      updateWeekly((prev) => {
         const current = normalizeWeekData(prev[weekId])
         return {
           ...prev,
@@ -262,13 +246,13 @@ function useWeeklyStorage(weekId) {
         }
       })
     },
-    [weekId],
+    [weekId, updateWeekly],
   )
 
   const setSlotFilled = useCallback(
     (dayIdx, hour, slot, filled) => {
       const key = slotKey(dayIdx, hour, slot)
-      setAllData((prev) => {
+      updateWeekly((prev) => {
         const current = normalizeWeekData(prev[weekId])
         const isFilled = !!current.filledSlots[key]
         if (isFilled === filled) return prev
@@ -281,7 +265,7 @@ function useWeeklyStorage(weekId) {
         }
       })
     },
-    [weekId],
+    [weekId, updateWeekly],
   )
 
   return { weekData, setGoal, setSidebarTodo, setDayTask, setSlotFilled }
