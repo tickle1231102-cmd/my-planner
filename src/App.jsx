@@ -17,6 +17,7 @@ import { useCloudSync } from './context/CloudSyncContext.jsx'
 import { DEFAULT_COLUMNS } from './lib/plannerStorage.js'
 import { formatDateDayOnly, formatDateLabel } from './lib/dateFormat.js'
 import { padMonthGoals, padYearGoals } from './lib/goalLists.js'
+import { parseAppRoute, syncAppRoute } from './lib/appRoute.js'
 
 const AVAILABLE_YEARS = [2025, 2026, 2027, 2028]
 const DAY_LABELS = ['월', '화', '수', '목', '금', '토', '일']
@@ -876,15 +877,29 @@ function App() {
 }
 
 function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
+  const routeInit = useMemo(() => parseAppRoute(), [])
+
   const today = useMemo(() => {
     const d = new Date()
     d.setHours(0, 0, 0, 0)
     return d
   }, [])
 
-  const initialYear = AVAILABLE_YEARS.includes(today.getFullYear())
+  const defaultYear = AVAILABLE_YEARS.includes(today.getFullYear())
     ? today.getFullYear()
     : 2026
+
+  const initialYear = useMemo(() => {
+    if (routeInit.view === 'weekly') {
+      const weekMonday = routeInit.selectedWeekMonday || getMondayOfWeek(today)
+      const weekYear = weekMonday.getFullYear()
+      if (AVAILABLE_YEARS.includes(weekYear)) return weekYear
+    }
+    if (routeInit.year && AVAILABLE_YEARS.includes(routeInit.year)) {
+      return routeInit.year
+    }
+    return defaultYear
+  }, [defaultYear, routeInit, today])
 
   const [year, setYear] = useState(initialYear)
 
@@ -898,12 +913,20 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
   const pendingTodayScrollRef = useRef(false)
   const touchStartRef = useRef(null)
 
-  const [mobileTab, setMobileTab] = useState('calendar')
+  const [mobileTab, setMobileTab] = useState(routeInit.tab)
   const [showAddColumn, setShowAddColumn] = useState(false)
-  const [view, setView] = useState('annual')
-  const [selectedWeekMonday, setSelectedWeekMonday] = useState(null)
+  const [view, setView] = useState(routeInit.view)
+  const [selectedWeekMonday, setSelectedWeekMonday] = useState(() => {
+    if (routeInit.selectedWeekMonday) return routeInit.selectedWeekMonday
+    if (routeInit.view === 'weekly') return getMondayOfWeek(today)
+    return null
+  })
   const [todayScrollTick, setTodayScrollTick] = useState(0)
   const [colorMenu, setColorMenu] = useState(null)
+
+  useEffect(() => {
+    syncAppRoute({ view, year, selectedWeekMonday, mobileTab })
+  }, [view, year, selectedWeekMonday, mobileTab])
 
   const openColorMenu = useCallback((date, event) => {
     if (date.getFullYear() !== year) return

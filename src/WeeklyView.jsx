@@ -5,6 +5,7 @@ import { getDominantMonthAndYear } from './lib/monthGoals.js'
 import { padMonthGoals, padWeekGoals } from './lib/goalLists.js'
 import MonthGoalChecklist from './components/MonthGoalChecklist.jsx'
 import { AppNavMenu } from './components/AppNavMenu.jsx'
+import WeeklyHabitStrip from './components/WeeklyHabitStrip.jsx'
 
 const WEEKLY_STORAGE_KEY = 'weekly-planner-v2'
 const DAY_LABELS = ['월', '화', '수', '목', '금', '토', '일']
@@ -16,10 +17,26 @@ const TASK_LINES = HOURS.length
 const DAY_TASK_LINES = TASK_LINES - 3
 const TASK_ROW_HEIGHT = TIMETABLE_ROW_HEIGHT
 const TASK_HEADER_HEIGHT = 26
+const NOT_TODO_HEADER_HEIGHT = 22
 const DAY_NOTE_HEIGHT = 72
 const TIMETABLE_CELL_BORDER = 'border-planner-sage-muted/30'
 const HOUR_LABEL_WIDTH = 'w-6'
 const DAY_COLUMN_MIN_WIDTH = 'min-w-[84px]'
+const SIDEBAR_WIDTH = 'lg:w-[252px]'
+const TODO_TASK_COUNT = Math.floor(DAY_TASK_LINES / 2)
+
+function getWeekOfMonth(date) {
+  const first = new Date(date.getFullYear(), date.getMonth(), 1)
+  const mondayOffset = (first.getDay() + 6) % 7
+  return Math.ceil((date.getDate() + mondayOffset) / 7)
+}
+
+function formatWeekOfMonthLabel(days) {
+  const { year, month } = getDominantMonthAndYear(days)
+  const anchor =
+    days.find((day) => day.getFullYear() === year && day.getMonth() === month) || days[0]
+  return `${month + 1}월 ${getWeekOfMonth(anchor)}주차`
+}
 
 function pad(n) {
   return String(n).padStart(2, '0')
@@ -399,36 +416,41 @@ function TaskRow({ task, onText, onToggle, inputRef, onEnter }) {
   )
 }
 
-function TaskList({ tasks, onText, onToggle }) {
-  const inputRefs = useRef([])
-
+function TaskList({ tasks, onText, onToggle, inputRefs, startIndex = 0 }) {
   return (
     <>
-      {tasks.map((task, index) => (
-        <TaskRow
-          key={task.id}
-          task={task}
-          inputRef={(el) => {
-            inputRefs.current[index] = el
-          }}
-          onText={(text) => onText(task.id, text)}
-          onToggle={(updates) => onToggle(task.id, updates)}
-          onEnter={() => inputRefs.current[index + 1]?.focus()}
-        />
-      ))}
+      {tasks.map((task, index) => {
+        const globalIndex = startIndex + index
+        return (
+          <TaskRow
+            key={task.id}
+            task={task}
+            inputRef={(el) => {
+              inputRefs.current[globalIndex] = el
+            }}
+            onText={(text) => onText(task.id, text)}
+            onToggle={(updates) => onToggle(task.id, updates)}
+            onEnter={() => inputRefs.current[globalIndex + 1]?.focus()}
+          />
+        )
+      })}
     </>
   )
 }
 
 function DayTasksPanel({ dayIdx, tasks, dayNote, setDayTask, setDayNote, showLabel }) {
+  const inputRefs = useRef([])
+  const todoTasks = tasks.slice(0, TODO_TASK_COUNT)
+  const notTodoTasks = tasks.slice(TODO_TASK_COUNT)
+
   return (
     <div className="flex h-full flex-col bg-white">
       {showLabel && (
         <p
-          className="flex shrink-0 items-center border-b border-planner-sand px-2 text-[9px] font-medium tracking-[0.25em] text-planner-ink-muted/55"
+          className="flex shrink-0 items-center border-b border-planner-sand/70 bg-planner-warm/50 px-2 text-[9px] font-medium tracking-[0.1em] text-planner-ink-muted/70"
           style={{ height: TASK_HEADER_HEIGHT }}
         >
-          TASKS
+          To do list
         </p>
       )}
       <textarea
@@ -440,7 +462,22 @@ function DayTasksPanel({ dayIdx, tasks, dayNote, setDayTask, setDayNote, showLab
       />
       <div className="min-h-0 flex-1 overflow-hidden">
         <TaskList
-          tasks={tasks}
+          tasks={todoTasks}
+          inputRefs={inputRefs}
+          startIndex={0}
+          onText={(taskId, text) => setDayTask(dayIdx, taskId, { text })}
+          onToggle={(taskId, updates) => setDayTask(dayIdx, taskId, updates)}
+        />
+        <p
+          className="flex shrink-0 items-center border-y border-planner-sand/70 bg-planner-warm/50 px-2 text-[9px] font-medium tracking-[0.1em] text-planner-ink-muted/70"
+          style={{ height: NOT_TODO_HEADER_HEIGHT }}
+        >
+          Not to do list
+        </p>
+        <TaskList
+          tasks={notTodoTasks}
+          inputRefs={inputRefs}
+          startIndex={TODO_TASK_COUNT}
           onText={(taskId, text) => setDayTask(dayIdx, taskId, { text })}
           onToggle={(taskId, updates) => setDayTask(dayIdx, taskId, updates)}
         />
@@ -550,7 +587,10 @@ function useIsDesktop() {
 }
 
 const tasksPanelHeight =
-  TASK_HEADER_HEIGHT + DAY_NOTE_HEIGHT + DAY_TASK_LINES * TASK_ROW_HEIGHT
+  TASK_HEADER_HEIGHT +
+  DAY_NOTE_HEIGHT +
+  NOT_TODO_HEADER_HEIGHT +
+  DAY_TASK_LINES * TASK_ROW_HEIGHT
 
 function MobileDayPlanner({
   dayIdx,
@@ -707,6 +747,8 @@ export default function WeeklyView({
     [monthGoals, goalYear, goalMonth],
   )
 
+  const weekLabel = useMemo(() => formatWeekOfMonthLabel(days), [days])
+
   const handleMonthGoalUpdate = useCallback(
     (goalId, updates) => {
       onUpdateMonthGoal?.(goalYear, goalMonth, goalId, updates)
@@ -762,8 +804,12 @@ export default function WeeklyView({
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <aside className="flex w-full shrink-0 flex-col border-b border-planner-sand bg-white lg:w-[210px] lg:border-b-0 lg:border-r">
-          <div className="hidden h-8 border-b border-planner-sand lg:block" />
+        <aside
+          className={`flex w-full shrink-0 flex-col border-b border-planner-sand bg-white ${SIDEBAR_WIDTH} lg:border-b-0 lg:border-r`}
+        >
+          <div className="hidden border-b border-planner-sand bg-planner-warm/60 px-3 py-2.5 lg:block">
+            <p className="text-center text-sm font-medium text-planner-ink">{weekLabel}</p>
+          </div>
 
           <div className="flex flex-1 flex-col">
             <SectionHeader>GOAL</SectionHeader>
@@ -785,6 +831,8 @@ export default function WeeklyView({
                 onUpdateGoal={handleWeekGoalUpdate}
               />
             </div>
+
+            <WeeklyHabitStrip days={days} />
 
             <SectionHeader>MEMO</SectionHeader>
             <textarea
