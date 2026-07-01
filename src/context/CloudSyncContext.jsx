@@ -9,8 +9,6 @@ import {
 } from 'react'
 import {
   getAuthenticatedProfile,
-  getUserKeyAuthStatus,
-  linkLegacyUserKey,
   registerWithUserKey,
   signInWithUserKey,
   signOutAccount,
@@ -205,16 +203,6 @@ export function CloudSyncProvider({ children }) {
     [cloudEnabled, hydrateAfterAuth],
   )
 
-  const checkUserKeyStatus = useCallback(
-    async (rawKey) => {
-      if (!cloudEnabled) {
-        throw new Error('SUPABASE_NOT_CONFIGURED')
-      }
-      return getUserKeyAuthStatus(rawKey)
-    },
-    [cloudEnabled],
-  )
-
   const signIn = useCallback(
     (rawKey, password) =>
       runAuthAction(() => signInWithUserKey(rawKey, password)),
@@ -225,14 +213,6 @@ export function CloudSyncProvider({ children }) {
     (rawKey, password, rawNickname) =>
       runAuthAction(() =>
         registerWithUserKey(rawKey, password, rawNickname?.trim() || ''),
-      ),
-    [runAuthAction],
-  )
-
-  const setLegacyPassword = useCallback(
-    (rawKey, password, rawNickname) =>
-      runAuthAction(() =>
-        linkLegacyUserKey(rawKey, password, rawNickname?.trim() || ''),
       ),
     [runAuthAction],
   )
@@ -357,10 +337,8 @@ export function CloudSyncProvider({ children }) {
       annualData,
       weeklyData,
       habitData,
-      checkUserKeyStatus,
       signIn,
       register,
-      setLegacyPassword,
       logout,
       useLocalMode,
       updateAnnual,
@@ -379,10 +357,8 @@ export function CloudSyncProvider({ children }) {
       annualData,
       weeklyData,
       habitData,
-      checkUserKeyStatus,
       signIn,
       register,
-      setLegacyPassword,
       logout,
       useLocalMode,
       updateAnnual,

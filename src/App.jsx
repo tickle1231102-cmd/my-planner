@@ -839,10 +839,8 @@ function App() {
     userKey,
     loading,
     ready,
-    checkUserKeyStatus,
     signIn,
     register,
-    setLegacyPassword,
     logout,
     syncing,
     error,
@@ -867,10 +865,8 @@ function App() {
   if (!userKey || !ready) {
     return (
       <UserKeyGate
-        onCheckStatus={checkUserKeyStatus}
         onSignIn={signIn}
         onRegister={register}
-        onSetLegacyPassword={setLegacyPassword}
         loading={loading}
         error={error}
       />

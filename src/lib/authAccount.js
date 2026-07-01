@@ -1,5 +1,8 @@
 import { getClient } from './supabaseBrowser.js'
-import { userKeyToAuthEmail } from './authEmail.js'
+import {
+  LEGACY_AUTH_EMAIL_SUFFIX,
+  userKeyToAuthEmailCandidates,
+} from './authEmail.js'
 import { isValidUserKey, normalizeUserKey } from './userIdentity.js'
 
 export const MIN_PASSWORD_LENGTH = 8
@@ -34,9 +37,6 @@ export async function getUserKeyAuthStatus(userKey) {
 function mapAuthError(error) {
   const msg = error?.message || ''
 
-  if (msg.includes('Invalid login credentials')) {
-    return '비밀번호가 올바르지 않습니다'
-  }
   if (msg.includes('User already registered') || msg.includes('already registered')) {
     return '이미 등록된 ID입니다. 로그인해 주세요.'
   }
@@ -54,6 +54,24 @@ function mapAuthError(error) {
   }
 
   return msg || '인증에 실패했습니다'
+}
+
+async function checkLocalSupabaseEnv() {
+  try {
+    const response = await fetch('/api/auth/env-check')
+    const body = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error(body.error || '서버 설정을 확인하지 못했습니다')
+    }
+    if (body.envIssue) {
+      throw new Error(body.envIssue)
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('로컬 Supabase')) {
+      throw error
+    }
+    // Production static hosting may not expose this route.
+  }
 }
 
 function mapRegisterApiError(errorCode, fallback) {
@@ -97,16 +115,54 @@ async function createAuthUserViaApi(userKey, password, mode, nickname = '') {
   }
 }
 
+async function migrateLegacyAuthEmail(accessToken) {
+  try {
+    await fetch('/api/auth/migrate-email', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+  } catch {
+    // Non-blocking: login already succeeded.
+  }
+}
+
 async function signInWithSession(userKey, password) {
   const key = normalizeUserKey(userKey)
   const supabase = getClient()
+  const emailCandidates = userKeyToAuthEmailCandidates(key)
 
-  const { error: signInError } = await supabase.auth.signInWithPassword({
-    email: userKeyToAuthEmail(key),
-    password,
-  })
+  let lastError = null
+  let signedIn = false
+  let usedLegacyEmail = false
 
-  if (signInError) throw new Error(mapAuthError(signInError))
+  for (const email of emailCandidates) {
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+
+    if (!signInError) {
+      signedIn = true
+      usedLegacyEmail = email.endsWith(LEGACY_AUTH_EMAIL_SUFFIX)
+      break
+    }
+
+    lastError = signInError
+    if (signInError.message.toLowerCase().includes('invalid api key')) {
+      throw new Error(
+        'Supabase API 키가 올바르지 않습니다. .env.local 의 VITE_SUPABASE_ANON_KEY 가 VITE_SUPABASE_URL 과 같은 프로젝트인지 확인해 주세요.',
+      )
+    }
+    if (!signInError.message.includes('Invalid login credentials')) {
+      throw new Error(mapAuthError(signInError))
+    }
+  }
+
+  if (!signedIn) {
+    throw new Error('WRONG_PASSWORD')
+  }
 
   const {
     data: { session },
@@ -115,7 +171,11 @@ async function signInWithSession(userKey, password) {
 
   if (sessionError) throw sessionError
   if (!session) {
-    throw new Error('로그인 세션을 만들지 못했습니다.')
+    throw new Error('WRONG_PASSWORD')
+  }
+
+  if (usedLegacyEmail) {
+    await migrateLegacyAuthEmail(session.access_token)
   }
 
   return key
@@ -130,7 +190,24 @@ export async function signInWithUserKey(userKey, password) {
     throw new Error(getPasswordHint())
   }
 
-  return signInWithSession(key, password)
+  await checkLocalSupabaseEnv()
+
+  const status = await getUserKeyAuthStatus(key)
+  if (status === 'new') {
+    throw new Error('등록되지 않은 ID입니다. 회원가입을 진행해 주세요.')
+  }
+  if (status === 'legacy') {
+    throw new Error('비밀번호 설정이 완료되지 않은 계정입니다.')
+  }
+
+  try {
+    return await signInWithSession(key, password)
+  } catch (error) {
+    if (error instanceof Error && error.message === 'WRONG_PASSWORD') {
+      throw new Error('비밀번호가 올바르지 않습니다')
+    }
+    throw error
+  }
 }
 
 export async function registerWithUserKey(userKey, password, nickname = '') {
@@ -141,6 +218,8 @@ export async function registerWithUserKey(userKey, password, nickname = '') {
   if (!isValidPassword(password)) {
     throw new Error(getPasswordHint())
   }
+
+  await checkLocalSupabaseEnv()
 
   try {
     await createAuthUserViaApi(key, password, 'register', nickname)

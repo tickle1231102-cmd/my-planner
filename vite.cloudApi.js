@@ -1,5 +1,11 @@
 import { loadEnv } from 'vite'
-import { handleAuthRegister, handleAuthStatus } from './server/auth.js'
+import {
+  handleAuthEnvCheck,
+  handleAuthRegister,
+  handleAuthStatus,
+  handleMigrateEmail,
+} from './server/auth.js'
+import { getSupabaseEnvIssue } from './server/supabaseEnv.js'
 import { handleDataRequest } from './server/cloudData.js'
 
 function readBody(req) {
@@ -35,6 +41,11 @@ export function cloudApiDevPlugin() {
       const env = loadEnv(server.config.mode, process.cwd(), '')
       Object.assign(process.env, env)
 
+      const envIssue = getSupabaseEnvIssue()
+      if (envIssue) {
+        console.warn(`[cloud-api] ${envIssue}`)
+      }
+
       server.middlewares.use(async (req, res, next) => {
         if (!req.url?.startsWith('/api/')) return next()
 
@@ -45,6 +56,18 @@ export function cloudApiDevPlugin() {
         }
 
         try {
+          if (req.url?.startsWith('/api/auth/env-check') && req.method === 'GET') {
+            const result = await handleAuthEnvCheck()
+            sendJson(res, result.status, result.body)
+            return
+          }
+
+          if (req.url?.startsWith('/api/auth/migrate-email') && req.method === 'POST') {
+            const result = await handleMigrateEmail(req.headers.authorization)
+            sendJson(res, result.status, result.body)
+            return
+          }
+
           if (req.url?.startsWith('/api/auth/status') && req.method === 'POST') {
             const body = await readBody(req)
             const result = await handleAuthStatus(body)

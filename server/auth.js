@@ -1,6 +1,8 @@
 import { getAdminClient } from './supabaseAdmin.js'
 import { isValidUserKey, normalizeUserKey } from './cloudData.js'
-import { userKeyToAuthEmail } from '../src/lib/authEmail.js'
+import { AUTH_EMAIL_SUFFIX, LEGACY_AUTH_EMAIL_SUFFIX, userKeyToAuthEmail } from '../src/lib/authEmail.js'
+import { getSupabaseEnvIssue } from './supabaseEnv.js'
+import { createClient } from '@supabase/supabase-js'
 
 export { userKeyToAuthEmail } from '../src/lib/authEmail.js'
 export const MIN_PASSWORD_LENGTH = 8
@@ -154,11 +156,27 @@ async function ensureAuthUser(admin, email, password, allowPasswordReset) {
   return updated.user
 }
 
+export async function handleAuthEnvCheck() {
+  const envIssue = getSupabaseEnvIssue()
+  return {
+    status: 200,
+    body: {
+      ok: !envIssue,
+      envIssue,
+    },
+  }
+}
+
 export async function handleAuthStatus(body = {}) {
   const userKey = normalizeUserKey(body.userKey)
 
   if (!isValidUserKey(userKey)) {
     return { status: 400, body: { error: 'invalid userKey' } }
+  }
+
+  const envIssue = getSupabaseEnvIssue()
+  if (envIssue) {
+    return { status: 500, body: { error: envIssue } }
   }
 
   let admin
@@ -244,6 +262,60 @@ export async function handleAuthRegister(body = {}) {
       return { status: 409, body: { error: 'already claimed' } }
     }
 
+    const message = formatServerError(error)
+    return { status: 500, body: { error: message } }
+  }
+}
+
+function getAnonClient() {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
+  const key = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+
+  if (!url || !key) {
+    throw new Error('Supabase anon key is not configured on the server')
+  }
+
+  return createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+}
+
+export async function handleMigrateEmail(authHeader) {
+  if (!authHeader?.startsWith('Bearer ')) {
+    return { status: 401, body: { error: 'unauthorized' } }
+  }
+
+  const token = authHeader.slice(7)
+
+  try {
+    const supabase = getAnonClient()
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser(token)
+
+    if (error || !user?.email) {
+      return { status: 401, body: { error: 'unauthorized' } }
+    }
+
+    if (!user.email.endsWith(LEGACY_AUTH_EMAIL_SUFFIX)) {
+      return { status: 200, body: { ok: true, migrated: false } }
+    }
+
+    const newEmail = user.email.replace(
+      LEGACY_AUTH_EMAIL_SUFFIX,
+      AUTH_EMAIL_SUFFIX,
+    )
+    const admin = getAdminClient()
+    const { error: updateError } = await admin.auth.admin.updateUserById(user.id, {
+      email: newEmail,
+      email_confirm: true,
+    })
+
+    if (updateError) throw updateError
+
+    return { status: 200, body: { ok: true, migrated: true } }
+  } catch (error) {
     const message = formatServerError(error)
     return { status: 500, body: { error: message } }
   }
