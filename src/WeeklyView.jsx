@@ -970,7 +970,30 @@ function DesktopWeekGrid({
         })}
       </div>
 
-      <div className="sticky z-10 flex border-b border-planner-sand/70 bg-planner-warm/50">
+      <div className="flex">
+        {dayIndices.map((di) => (
+          <div
+            key={di}
+            className={`${DAY_COLUMN_MIN_WIDTH} flex-1 border-r border-planner-sand last:border-r-0`}
+          >
+            <div
+              className="border-b border-planner-sand"
+              style={{ height: tasksPanelHeight }}
+            >
+              <DayTasksPanel
+                dayIdx={di}
+                tasks={weekData.dayTasks[di]}
+                dayNote={weekData.dayNotes[di] || ''}
+                setDayTask={setDayTask}
+                setDayNote={setDayNote}
+                showLabel
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex border-b border-planner-sand/70 bg-planner-warm/50">
         <div
           className={[
             'shrink-0 border-r bg-planner-warm/50',
@@ -994,19 +1017,6 @@ function DesktopWeekGrid({
             key={di}
             className={`${DAY_COLUMN_MIN_WIDTH} flex-1 border-r border-planner-sand last:border-r-0`}
           >
-            <div
-              className="border-b border-planner-sand"
-              style={{ height: tasksPanelHeight }}
-            >
-              <DayTasksPanel
-                dayIdx={di}
-                tasks={weekData.dayTasks[di]}
-                dayNote={weekData.dayNotes[di] || ''}
-                setDayTask={setDayTask}
-                setDayNote={setDayNote}
-                showLabel
-              />
-            </div>
             <DayTimetableColumn
               dayIdx={di}
               filledSlots={weekData.filledSlots}

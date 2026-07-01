@@ -25,8 +25,6 @@ const MONTH_LABELS = [
   '1월', '2월', '3월', '4월', '5월', '6월',
   '7월', '8월', '9월', '10월', '11월', '12월',
 ]
-const HEAVENLY = ['갑', '을', '병', '정', '무', '기', '경', '신', '임', '계']
-const EARTHLY = ['자', '축', '인', '묘', '진', '사', '오', '미', '신', '유', '술', '해']
 
 const ROW_MIN_HEIGHT = 36
 const MONTH_COL_WIDTH = 34
@@ -69,10 +67,6 @@ function isSameDay(a, b) {
     a.getMonth() === b.getMonth() &&
     a.getDate() === b.getDate()
   )
-}
-
-function getKoreanZodiac(year) {
-  return HEAVENLY[(year - 4) % 10] + EARTHLY[(year - 4) % 12] + '년'
 }
 
 function getWeekId(days) {
@@ -508,8 +502,8 @@ function YearNavigator({ year, onChange }) {
       >
         ‹
       </button>
-      <p className="min-w-[140px] text-center text-sm font-medium tracking-wide text-planner-ink sm:text-base">
-        {year}년 {getKoreanZodiac(year)}
+      <p className="min-w-[72px] text-center text-sm font-medium tracking-wide text-planner-ink sm:text-base">
+        {year}년
       </p>
       <button
         type="button"
