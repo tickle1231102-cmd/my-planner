@@ -13,7 +13,7 @@ import SupabaseSetup from './components/SupabaseSetup.jsx'
 import { CalendarIcon } from './components/CalendarIcon.jsx'
 import { useCloudSync } from './context/CloudSyncContext.jsx'
 import { DEFAULT_COLUMNS } from './lib/plannerStorage.js'
-import { formatDateLabel } from './lib/dateFormat.js'
+import { formatDateDayOnly, formatDateLabel } from './lib/dateFormat.js'
 import { padMonthGoals, padYearGoals } from './lib/goalLists.js'
 
 const AVAILABLE_YEARS = [2025, 2026, 2027, 2028]
@@ -41,6 +41,7 @@ const DATE_COLOR_OPTIONS = [
 const DATE_COLOR_CELL = Object.fromEntries(
   DATE_COLOR_OPTIONS.map((option) => [option.id, option.cell]),
 )
+const SATURDAY_DIVIDER = 'border-l-2 border-planner-sage/80'
 
 function pad(n) {
   return String(n).padStart(2, '0')
@@ -262,7 +263,6 @@ function CalendarCell({
   date,
   year,
   isToday,
-  isWeekend,
   compact,
   highlightColor,
   onSelect,
@@ -277,7 +277,7 @@ function CalendarCell({
       ? 'min-h-[34px] px-0.5 py-0.5 text-[15px]'
       : 'min-h-[36px] px-0.5 py-0.5 text-[16.5px]',
     !inYear && 'text-planner-ink-muted/35',
-    inYear && !customBg && isWeekend && !isToday && 'bg-planner-weekend',
+    inYear && !customBg && !isToday && 'bg-transparent',
     customBg,
     isToday && !customBg && 'bg-planner-today',
     isToday && 'font-semibold text-planner-ink ring-1 ring-inset ring-planner-today-ring/50',
@@ -296,7 +296,7 @@ function CalendarCell({
   const content = (
     <>
       <span className={inYear ? 'text-planner-ink' : ''}>
-        {formatDateLabel(date)}
+        {compact ? formatDateDayOnly(date) : formatDateLabel(date)}
       </span>
       {isToday && (
         <span className="mt-px text-[12px] font-medium leading-none text-planner-today-ring">
@@ -587,6 +587,7 @@ function PlannerGrid({
             key={day}
             className={[
               'sticky top-0 z-10 flex items-center justify-center border-b border-r border-planner-sand/60 py-1 text-[16.5px] font-medium last:border-r-0',
+              i === 5 && SATURDAY_DIVIDER,
               i >= 5
                 ? 'bg-planner-sage-light/80 text-planner-sage'
                 : 'bg-planner-sage-light text-planner-sage',
@@ -604,7 +605,7 @@ function PlannerGrid({
         {weeks.map((week, weekIndex) => {
           const monthInfo = monthSpans.get(weekIndex)
           const isEvenMonth = week.primaryMonth % 2 === 0
-          const rowBg = isEvenMonth ? 'bg-white' : 'bg-planner-cream/50'
+          const rowBg = isEvenMonth ? 'bg-white' : 'bg-planner-warm'
 
           return (
             <div key={week.id} className="contents">
@@ -627,13 +628,19 @@ function PlannerGrid({
                   <div
                     key={i}
                     data-today-anchor={isToday ? 'true' : undefined}
-                    className={`border-b border-planner-sand/60 ${rowBg} ${isToday ? 'scroll-mt-28' : ''}`}
+                    className={[
+                      'border-b border-planner-sand/60',
+                      rowBg,
+                      i === 5 && SATURDAY_DIVIDER,
+                      isToday && 'scroll-mt-28',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
                   >
                     <CalendarCell
                       date={date}
                       year={year}
                       isToday={isToday}
-                      isWeekend={i >= 5}
                       compact={compact}
                       highlightColor={dateColors[dateKey]}
                       onSelect={onDateSelect}
@@ -698,6 +705,7 @@ function MobileCalendar({ weeks, year, today, monthSpans, dateColors, onDateSele
             style={{ gridColumn: i + 2 }}
             className={[
               'flex items-center justify-center border-b border-r border-planner-sand/60 py-1 text-[15px] font-medium',
+              i === 5 && SATURDAY_DIVIDER,
               i >= 5 ? 'bg-planner-sage-light/80 text-planner-sage' : 'bg-planner-sage-light text-planner-sage',
             ].join(' ')}
           >
@@ -708,7 +716,7 @@ function MobileCalendar({ weeks, year, today, monthSpans, dateColors, onDateSele
         {weeks.map((week, weekIndex) => {
           const monthInfo = monthSpans.get(weekIndex)
           const isEvenMonth = week.primaryMonth % 2 === 0
-          const rowBg = isEvenMonth ? 'bg-white' : 'bg-planner-cream/50'
+          const rowBg = isEvenMonth ? 'bg-white' : 'bg-planner-warm'
 
           return (
             <div key={week.id} className="contents">
@@ -732,13 +740,19 @@ function MobileCalendar({ weeks, year, today, monthSpans, dateColors, onDateSele
                     key={i}
                     data-today-anchor={isToday ? 'true' : undefined}
                     style={{ gridColumn: i + 2 }}
-                    className={`border-b border-planner-sand/60 ${rowBg} ${isToday ? 'scroll-mt-28' : ''}`}
+                    className={[
+                      'border-b border-planner-sand/60',
+                      rowBg,
+                      i === 5 && SATURDAY_DIVIDER,
+                      isToday && 'scroll-mt-28',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
                   >
                     <CalendarCell
                       date={date}
                       year={year}
                       isToday={isToday}
-                      isWeekend={i >= 5}
                       compact
                       highlightColor={dateColors[dateKey]}
                       onSelect={onDateSelect}
@@ -782,7 +796,7 @@ function MobileNotes({
 
         {weeks.map((week, weekIndex) => {
           const isEvenMonth = week.primaryMonth % 2 === 0
-          const rowBg = isEvenMonth ? 'bg-white' : 'bg-planner-cream/50'
+          const rowBg = isEvenMonth ? 'bg-white' : 'bg-planner-warm'
 
           return (
             <div key={week.id} className="contents">

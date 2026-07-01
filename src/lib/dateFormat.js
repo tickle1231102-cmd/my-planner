@@ -2,6 +2,10 @@ export function formatDateLabel(date) {
   return `${date.getMonth() + 1}월 ${date.getDate()}일`
 }
 
+export function formatDateDayOnly(date) {
+  return `${date.getDate()}일`
+}
+
 export function formatDateWithWeekday(date, weekdayLabel) {
   return `${formatDateLabel(date)} (${weekdayLabel})`
 }
