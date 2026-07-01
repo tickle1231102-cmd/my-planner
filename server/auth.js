@@ -27,12 +27,73 @@ async function findAuthUserByEmail(admin, email) {
 }
 
 async function getUserKeyAuthStatus(admin, userKey) {
-  const { data, error } = await admin.rpc('get_user_key_auth_status', {
-    p_user_key: userKey,
-  })
+  const { data: profile, error } = await admin
+    .from('profiles')
+    .select('auth_user_id')
+    .eq('user_key', userKey)
+    .maybeSingle()
 
   if (error) throw error
-  return data
+  if (!profile) return 'new'
+  if (!profile.auth_user_id) return 'legacy'
+  return 'registered'
+}
+
+async function linkProfileToAuthUser(admin, userKey, authUserId, nickname) {
+  const trimmedNickname = nickname?.trim() || ''
+  const { data: profile, error: profileError } = await admin
+    .from('profiles')
+    .select('user_key, auth_user_id, nickname')
+    .eq('user_key', userKey)
+    .maybeSingle()
+
+  if (profileError) throw profileError
+
+  if (profile) {
+    if (profile.auth_user_id && profile.auth_user_id !== authUserId) {
+      const err = new Error('user key already claimed')
+      err.code = 'ALREADY_CLAIMED'
+      throw err
+    }
+
+    const { error: updateError } = await admin
+      .from('profiles')
+      .update({
+        auth_user_id: authUserId,
+        nickname: trimmedNickname || profile.nickname,
+      })
+      .eq('user_key', userKey)
+
+    if (updateError) throw updateError
+
+    const { data: appRow } = await admin
+      .from('app_data')
+      .select('user_key')
+      .eq('user_key', userKey)
+      .maybeSingle()
+
+    if (!appRow) {
+      const { error: dataError } = await admin.from('app_data').insert({
+        user_key: userKey,
+      })
+      if (dataError) throw dataError
+    }
+    return
+  }
+
+  const { error: insertProfileError } = await admin.from('profiles').insert({
+    user_key: userKey,
+    nickname: trimmedNickname || userKey,
+    auth_user_id: authUserId,
+  })
+
+  if (insertProfileError) throw insertProfileError
+
+  const { error: insertDataError } = await admin.from('app_data').insert({
+    user_key: userKey,
+  })
+
+  if (insertDataError) throw insertDataError
 }
 
 function userAlreadyExists(error) {
@@ -45,13 +106,13 @@ function userAlreadyExists(error) {
 }
 
 async function ensureAuthUser(admin, email, password, allowPasswordReset) {
-  const { error: createError } = await admin.auth.admin.createUser({
+  const { data: created, error: createError } = await admin.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
   })
 
-  if (!createError) return
+  if (!createError) return created.user
 
   if (!userAlreadyExists(createError)) {
     throw createError
@@ -68,7 +129,7 @@ async function ensureAuthUser(admin, email, password, allowPasswordReset) {
     throw createError
   }
 
-  const { error: updateError } = await admin.auth.admin.updateUserById(
+  const { data: updated, error: updateError } = await admin.auth.admin.updateUserById(
     existingUser.id,
     {
       password,
@@ -77,11 +138,40 @@ async function ensureAuthUser(admin, email, password, allowPasswordReset) {
   )
 
   if (updateError) throw updateError
+  return updated.user
+}
+
+export async function handleAuthStatus(body = {}) {
+  const userKey = normalizeUserKey(body.userKey)
+
+  if (!isValidUserKey(userKey)) {
+    return { status: 400, body: { error: 'invalid userKey' } }
+  }
+
+  let admin
+  try {
+    admin = getAdminClient()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'server misconfigured'
+    return { status: 500, body: { error: message } }
+  }
+
+  try {
+    const status = await getUserKeyAuthStatus(admin, userKey)
+    return { status: 200, body: { status } }
+  } catch (error) {
+    const message =
+      error?.message ||
+      error?.msg ||
+      (typeof error === 'string' ? error : 'status check failed')
+    return { status: 500, body: { error: message } }
+  }
 }
 
 export async function handleAuthRegister(body = {}) {
   const userKey = normalizeUserKey(body.userKey)
   const password = body.password
+  const nickname = body.nickname || ''
   const mode = body.mode === 'legacy' ? 'legacy' : 'register'
 
   if (!isValidUserKey(userKey)) {
@@ -128,12 +218,20 @@ export async function handleAuthRegister(body = {}) {
     }
 
     const email = userKeyToAuthEmail(userKey)
-    await ensureAuthUser(admin, email, password, mode === 'legacy')
+    const authUser = await ensureAuthUser(admin, email, password, mode === 'legacy')
+    if (!authUser?.id) {
+      throw new Error('auth user missing after create')
+    }
+
+    await linkProfileToAuthUser(admin, userKey, authUser.id, nickname)
 
     return { status: 200, body: { ok: true } }
   } catch (error) {
     if (error?.code === 'ALREADY_REGISTERED') {
       return { status: 409, body: { error: 'already registered' } }
+    }
+    if (error?.code === 'ALREADY_CLAIMED') {
+      return { status: 409, body: { error: 'already claimed' } }
     }
 
     const message =

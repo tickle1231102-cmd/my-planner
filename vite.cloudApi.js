@@ -1,5 +1,5 @@
 import { loadEnv } from 'vite'
-import { handleAuthRegister } from './server/auth.js'
+import { handleAuthRegister, handleAuthStatus } from './server/auth.js'
 import { handleDataRequest } from './server/cloudData.js'
 
 function readBody(req) {
@@ -45,6 +45,13 @@ export function cloudApiDevPlugin() {
         }
 
         try {
+          if (req.url?.startsWith('/api/auth/status') && req.method === 'POST') {
+            const body = await readBody(req)
+            const result = await handleAuthStatus(body)
+            sendJson(res, result.status, result.body)
+            return
+          }
+
           if (req.url?.startsWith('/api/auth/register') && req.method === 'POST') {
             const body = await readBody(req)
             const result = await handleAuthRegister(body)

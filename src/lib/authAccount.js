@@ -16,15 +16,19 @@ export async function getUserKeyAuthStatus(userKey) {
   const key = normalizeUserKey(userKey)
   if (!isValidUserKey(key)) return 'invalid'
 
-  const supabase = getClient()
-  const { data, error } = await supabase.rpc('get_user_key_auth_status', {
-    p_user_key: key,
+  const response = await fetch('/api/auth/status', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userKey: key }),
   })
 
-  if (error) {
-    throw new Error(error.message || '계정 상태를 확인하지 못했습니다')
+  const body = await response.json().catch(() => ({}))
+
+  if (!response.ok) {
+    throw new Error(body.error || '계정 상태를 확인하지 못했습니다')
   }
-  return data
+
+  return body.status
 }
 
 function mapAuthError(error) {
@@ -65,19 +69,23 @@ function mapRegisterApiError(errorCode, fallback) {
   if (fallback?.includes('SERVICE_ROLE')) {
     return '서버 인증 설정이 없습니다. SUPABASE_SERVICE_ROLE_KEY를 확인해 주세요.'
   }
+  if (errorCode === 'already claimed') {
+    return '이 ID는 다른 계정에 연결되어 있습니다'
+  }
   if (fallback?.includes('rate limit')) {
     return '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.'
   }
   return fallback || '회원가입에 실패했습니다'
 }
 
-async function createAuthUserViaApi(userKey, password, mode) {
+async function createAuthUserViaApi(userKey, password, mode, nickname = '') {
   const response = await fetch('/api/auth/register', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       userKey: normalizeUserKey(userKey),
       password,
+      nickname,
       mode,
     }),
   })
@@ -89,7 +97,7 @@ async function createAuthUserViaApi(userKey, password, mode) {
   }
 }
 
-async function signInAndClaim(userKey, password, nickname = '') {
+async function signInWithSession(userKey, password) {
   const key = normalizeUserKey(userKey)
   const supabase = getClient()
 
@@ -110,19 +118,6 @@ async function signInAndClaim(userKey, password, nickname = '') {
     throw new Error('로그인 세션을 만들지 못했습니다.')
   }
 
-  const { error: claimError } = await supabase.rpc('claim_profile', {
-    p_user_key: key,
-    p_nickname: nickname?.trim() || null,
-  })
-
-  if (claimError) {
-    await supabase.auth.signOut()
-    if (claimError.message.includes('already claimed')) {
-      throw new Error('이 ID는 다른 계정에 연결되어 있습니다')
-    }
-    throw claimError
-  }
-
   return key
 }
 
@@ -135,7 +130,7 @@ export async function signInWithUserKey(userKey, password) {
     throw new Error(getPasswordHint())
   }
 
-  return signInAndClaim(key, password)
+  return signInWithSession(key, password)
 }
 
 export async function registerWithUserKey(userKey, password, nickname = '') {
@@ -148,8 +143,8 @@ export async function registerWithUserKey(userKey, password, nickname = '') {
   }
 
   try {
-    await createAuthUserViaApi(key, password, 'register')
-    return await signInAndClaim(key, password, nickname)
+    await createAuthUserViaApi(key, password, 'register', nickname)
+    return await signInWithSession(key, password)
   } catch (error) {
     const supabase = getClient()
     await supabase.auth.signOut()
@@ -167,8 +162,8 @@ export async function linkLegacyUserKey(userKey, password, nickname = '') {
   }
 
   try {
-    await createAuthUserViaApi(key, password, 'legacy')
-    return await signInAndClaim(key, password, nickname)
+    await createAuthUserViaApi(key, password, 'legacy', nickname)
+    return await signInWithSession(key, password)
   } catch (error) {
     const supabase = getClient()
     await supabase.auth.signOut()
