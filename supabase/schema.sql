@@ -11,8 +11,12 @@ create table if not exists public.app_data (
   user_key text primary key,
   annual_data jsonb not null default '{"columns":[],"weekData":{}}'::jsonb,
   weekly_data jsonb not null default '{}'::jsonb,
+  habit_data jsonb not null default '{}'::jsonb,
   updated_at timestamptz not null default now()
 );
+
+alter table public.app_data
+  add column if not exists habit_data jsonb not null default '{}'::jsonb;
 
 do $$
 begin

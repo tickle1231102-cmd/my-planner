@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import { useCloudSync } from './context/CloudSyncContext.jsx'
 import {
   buildWeekChunks,
   computeDailyProgress,
@@ -9,8 +10,6 @@ import {
   getDaysInMonth,
   getHabitCheck,
   getMonthData,
-  loadHabitData,
-  saveHabitData,
   setMonthData,
   slotKey,
   toggleHabitCheck,
@@ -32,27 +31,23 @@ const WEEK_BACKGROUNDS = [
 ]
 
 function useHabitTracker(year, month) {
-  const [allData, setAllData] = useState(() => loadHabitData())
-
-  useEffect(() => {
-    saveHabitData(allData)
-  }, [allData])
+  const { habitData, updateHabitData } = useCloudSync()
 
   const daysInMonth = getDaysInMonth(year, month)
   const monthData = useMemo(
-    () => getMonthData(allData, year, month),
-    [allData, year, month],
+    () => getMonthData(habitData, year, month),
+    [habitData, year, month],
   )
 
   const updateMonth = useCallback(
     (updater) => {
-      setAllData((prev) => {
+      updateHabitData((prev) => {
         const current = getMonthData(prev, year, month)
         const next = typeof updater === 'function' ? updater(current) : updater
         return setMonthData(prev, year, month, next)
       })
     },
-    [year, month],
+    [updateHabitData, year, month],
   )
 
   const updateHabit = useCallback(
@@ -66,13 +61,16 @@ function useHabitTracker(year, month) {
     [updateMonth],
   )
 
-  const toggleCheck = useCallback((habitIndex, slot) => {
-    setAllData((prev) => toggleHabitCheck(prev, habitIndex, slot))
-  }, [])
+  const toggleCheck = useCallback(
+    (habitIndex, slot) => {
+      updateHabitData((prev) => toggleHabitCheck(prev, habitIndex, slot))
+    },
+    [updateHabitData],
+  )
 
   const isChecked = useCallback(
-    (habitIndex, slot) => getHabitCheck(allData, habitIndex, slot),
-    [allData],
+    (habitIndex, slot) => getHabitCheck(habitData, habitIndex, slot),
+    [habitData],
   )
 
   const addHabit = useCallback(() => {

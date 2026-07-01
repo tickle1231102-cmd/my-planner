@@ -4,6 +4,7 @@ const USER_KEY_RE = /^[a-zA-Z0-9가-힣_-]{3,32}$/
 
 const DEFAULT_ANNUAL = { columns: [], weekData: {} }
 const DEFAULT_WEEKLY = {}
+const DEFAULT_HABIT = {}
 
 function toUserMessage(error) {
   const code = error?.code || ''
@@ -60,6 +61,7 @@ async function ensureProfile(userKey, nickname) {
     user_key: userKey,
     annual_data: DEFAULT_ANNUAL,
     weekly_data: DEFAULT_WEEKLY,
+    habit_data: DEFAULT_HABIT,
   })
 
   if (dataError) throw wrapError(dataError)
@@ -75,7 +77,7 @@ export async function loadAppData(userKey) {
 
   const { data, error } = await supabase
     .from('app_data')
-    .select('annual_data, weekly_data, updated_at')
+    .select('annual_data, weekly_data, habit_data, updated_at')
     .eq('user_key', userKey)
     .single()
 
@@ -93,12 +95,13 @@ export async function saveAppData(userKey, payload = {}) {
   const patch = { user_key: userKey }
   if (payload.annual_data !== undefined) patch.annual_data = payload.annual_data
   if (payload.weekly_data !== undefined) patch.weekly_data = payload.weekly_data
+  if (payload.habit_data !== undefined) patch.habit_data = payload.habit_data
 
   const supabase = getClient()
   const { data, error } = await supabase
     .from('app_data')
     .upsert(patch)
-    .select('annual_data, weekly_data, updated_at')
+    .select('annual_data, weekly_data, habit_data, updated_at')
     .single()
 
   if (error) throw wrapError(error)

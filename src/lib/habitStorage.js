@@ -58,6 +58,15 @@ export function saveHabitData(data) {
   localStorage.setItem(HABIT_STORAGE_KEY, JSON.stringify(data))
 }
 
+export function hasLocalHabitData() {
+  const data = loadHabitData()
+  return Object.keys(data).length > 0
+}
+
+export function isHabitDataEmpty(habitData) {
+  return !habitData || Object.keys(habitData).length === 0
+}
+
 export function getMonthData(allData, year, month) {
   const daysInMonth = getDaysInMonth(year, month)
   const key = monthKey(year, month)

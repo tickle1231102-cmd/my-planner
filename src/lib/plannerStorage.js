@@ -1,3 +1,5 @@
+import { hasLocalHabitData } from './habitStorage.js'
+
 export const ANNUAL_STORAGE_KEY = 'annual-planner-v1'
 export const WEEKLY_STORAGE_KEY = 'weekly-planner-v2'
 
@@ -55,5 +57,5 @@ export function hasLocalData() {
   const annualHas =
     annual?.weekData && Object.keys(annual.weekData).length > 0
   const weeklyHas = weekly && Object.keys(weekly).length > 0
-  return annualHas || weeklyHas
+  return annualHas || weeklyHas || hasLocalHabitData()
 }
