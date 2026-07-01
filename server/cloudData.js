@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { getAdminClient } from './supabaseAdmin.js'
 
 const USER_KEY_RE = /^[a-zA-Z0-9가-힣_-]{3,32}$/
 
@@ -14,21 +14,6 @@ export function normalizeUserKey(raw) {
 
 export function isValidUserKey(userKey) {
   return USER_KEY_RE.test(userKey)
-}
-
-function getAdminClient() {
-  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (!url || !key) {
-    throw new Error(
-      'SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in environment',
-    )
-  }
-
-  return createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  })
 }
 
 async function ensureProfile(userKey, nickname) {

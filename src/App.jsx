@@ -43,6 +43,7 @@ const DATE_COLOR_CELL = Object.fromEntries(
   DATE_COLOR_OPTIONS.map((option) => [option.id, option.cell]),
 )
 const SATURDAY_DIVIDER = 'border-l-2 border-planner-sage/80'
+const MEMO_CALENDAR_DIVIDER = 'border-l-[3px] border-l-planner-ink/35'
 
 function PlaceholderPage({ title }) {
   return (
@@ -243,12 +244,12 @@ function columnHeaderColor(columnId) {
   return 'bg-planner-warm text-planner-ink-muted'
 }
 
-function ColumnHeader({ column, onRemove }) {
+function ColumnHeader({ column, onRemove, leadingDivider = false }) {
   const isDefault = DEFAULT_COLUMNS.some((c) => c.id === column.id)
 
   return (
     <div
-      className={`group relative flex min-h-[30px] items-center justify-center border-r border-planner-sand/60 px-1.5 py-1 text-center text-[11px] font-medium tracking-wide last:border-r-0 ${columnHeaderColor(column.id)}`}
+      className={`group relative flex min-h-[30px] items-center justify-center border-r border-planner-sand/60 px-1.5 py-1 text-center text-[11px] font-medium tracking-wide last:border-r-0 ${columnHeaderColor(column.id)} ${leadingDivider ? MEMO_CALENDAR_DIVIDER : ''}`}
     >
       <span>{column.label}</span>
       {!isDefault && onRemove && (
@@ -573,7 +574,7 @@ function PlannerGrid({
           달력
         </div>
         <div
-          className="flex items-center justify-center border-b border-r border-planner-sand bg-planner-warm py-1 text-[11px] font-medium text-planner-ink-muted"
+          className={`flex items-center justify-center border-b border-r border-planner-sand bg-planner-warm py-1 text-[11px] font-medium text-planner-ink-muted ${MEMO_CALENDAR_DIVIDER}`}
           style={{ gridColumn: `span ${columns.length}` }}
         >
           메모
@@ -602,8 +603,13 @@ function PlannerGrid({
             {day}
           </div>
         ))}
-        {columns.map((col) => (
-          <ColumnHeader key={col.id} column={col} onRemove={removeColumn} />
+        {columns.map((col, colIndex) => (
+          <ColumnHeader
+            key={col.id}
+            column={col}
+            onRemove={removeColumn}
+            leadingDivider={colIndex === 0}
+          />
         ))}
         <div className="sticky top-0 z-10 border-b border-planner-sand bg-planner-warm" />
 
@@ -656,10 +662,10 @@ function PlannerGrid({
                 )
               })}
 
-              {columns.map((col) => (
+              {columns.map((col, colIndex) => (
                 <div
                   key={col.id}
-                  className={`border-b border-r border-planner-sand/40 ${rowBg}`}
+                  className={`border-b border-r border-planner-sand/40 ${rowBg} ${colIndex === 0 ? MEMO_CALENDAR_DIVIDER : ''}`}
                   style={{ minHeight: ROW_MIN_HEIGHT }}
                 >
                   <textarea
@@ -833,7 +839,10 @@ function App() {
     userKey,
     loading,
     ready,
-    login,
+    checkUserKeyStatus,
+    signIn,
+    register,
+    setLegacyPassword,
     logout,
     syncing,
     error,
@@ -856,7 +865,16 @@ function App() {
   }
 
   if (!userKey || !ready) {
-    return <UserKeyGate onLogin={login} loading={loading} error={error} />
+    return (
+      <UserKeyGate
+        onCheckStatus={checkUserKeyStatus}
+        onSignIn={signIn}
+        onRegister={register}
+        onSetLegacyPassword={setLegacyPassword}
+        loading={loading}
+        error={error}
+      />
+    )
   }
 
   return (
@@ -1132,7 +1150,7 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
               onClick={logout}
               className="rounded-full border border-planner-sand px-3 py-1.5 text-[11px] font-medium text-planner-ink-muted transition hover:bg-white sm:text-xs"
             >
-              ID 변경
+              로그아웃
             </button>
             {showTodayButton && isPlannerView && (
               <button

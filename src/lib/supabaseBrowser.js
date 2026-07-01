@@ -28,7 +28,11 @@ function getClient() {
   }
 
   return createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
   })
 }
 

@@ -1,62 +1,16 @@
--- ▼▼▼ 이 파일 전체를 복사해서 Supabase SQL Editor에 붙여넣고 Run ▼▼▼
--- (또는 supabase/schema.sql 과 동일)
-
-create table if not exists public.profiles (
-  id uuid primary key default gen_random_uuid(),
-  user_key text unique not null,
-  nickname text,
-  auth_user_id uuid unique references auth.users (id) on delete cascade,
-  created_at timestamptz not null default now()
-);
-
-create table if not exists public.app_data (
-  user_key text primary key,
-  annual_data jsonb not null default '{"columns":[],"weekData":{}}'::jsonb,
-  weekly_data jsonb not null default '{}'::jsonb,
-  habit_data jsonb not null default '{}'::jsonb,
-  updated_at timestamptz not null default now()
-);
+-- ID + password auth: link profiles to Supabase Auth users
 
 alter table public.profiles
   add column if not exists auth_user_id uuid unique references auth.users (id) on delete cascade;
 
-alter table public.app_data
-  add column if not exists habit_data jsonb not null default '{}'::jsonb;
-
 create index if not exists profiles_auth_user_id_idx on public.profiles (auth_user_id);
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_constraint where conname = 'app_data_user_key_fkey'
-  ) then
-    alter table public.app_data
-      add constraint app_data_user_key_fkey
-      foreign key (user_key) references public.profiles (user_key) on delete cascade;
-  end if;
-end $$;
-
-create or replace function public.set_updated_at()
-returns trigger language plpgsql as $$
-begin
-  new.updated_at = now();
-  return new;
-end;
-$$;
-
-drop trigger if exists app_data_updated_at on public.app_data;
-create trigger app_data_updated_at
-before update on public.app_data
-for each row execute function public.set_updated_at();
-
-alter table public.profiles enable row level security;
-alter table public.app_data enable row level security;
 
 drop policy if exists "profiles_anon_select" on public.profiles;
 drop policy if exists "profiles_anon_insert" on public.profiles;
 drop policy if exists "app_data_anon_select" on public.app_data;
 drop policy if exists "app_data_anon_insert" on public.app_data;
 drop policy if exists "app_data_anon_update" on public.app_data;
+
 drop policy if exists "profiles_select_own" on public.profiles;
 drop policy if exists "profiles_update_own" on public.profiles;
 drop policy if exists "app_data_select_own" on public.app_data;
@@ -76,8 +30,10 @@ create policy "app_data_select_own" on public.app_data
   for select to authenticated
   using (
     exists (
-      select 1 from public.profiles p
-      where p.user_key = app_data.user_key and p.auth_user_id = auth.uid()
+      select 1
+      from public.profiles p
+      where p.user_key = app_data.user_key
+        and p.auth_user_id = auth.uid()
     )
   );
 
@@ -85,8 +41,10 @@ create policy "app_data_insert_own" on public.app_data
   for insert to authenticated
   with check (
     exists (
-      select 1 from public.profiles p
-      where p.user_key = app_data.user_key and p.auth_user_id = auth.uid()
+      select 1
+      from public.profiles p
+      where p.user_key = app_data.user_key
+        and p.auth_user_id = auth.uid()
     )
   );
 
@@ -94,14 +52,18 @@ create policy "app_data_update_own" on public.app_data
   for update to authenticated
   using (
     exists (
-      select 1 from public.profiles p
-      where p.user_key = app_data.user_key and p.auth_user_id = auth.uid()
+      select 1
+      from public.profiles p
+      where p.user_key = app_data.user_key
+        and p.auth_user_id = auth.uid()
     )
   )
   with check (
     exists (
-      select 1 from public.profiles p
-      where p.user_key = app_data.user_key and p.auth_user_id = auth.uid()
+      select 1
+      from public.profiles p
+      where p.user_key = app_data.user_key
+        and p.auth_user_id = auth.uid()
     )
   );
 
@@ -115,15 +77,18 @@ begin
   if p_user_key is null or not (p_user_key ~ '^[a-zA-Z0-9가-힣_-]{3,32}$') then
     return 'invalid';
   end if;
+
   if not exists (select 1 from public.profiles where user_key = p_user_key) then
     return 'new';
   end if;
+
   if exists (
     select 1 from public.profiles
     where user_key = p_user_key and auth_user_id is null
   ) then
     return 'legacy';
   end if;
+
   return 'registered';
 end;
 $$;
@@ -137,20 +102,26 @@ as $$
 declare
   v_uid uuid := auth.uid();
 begin
-  if v_uid is null then raise exception 'not authenticated'; end if;
+  if v_uid is null then
+    raise exception 'not authenticated';
+  end if;
+
   if p_user_key is null or not (p_user_key ~ '^[a-zA-Z0-9가-힣_-]{3,32}$') then
     raise exception 'invalid user key';
   end if;
 
   update public.profiles
-  set auth_user_id = v_uid,
-      nickname = coalesce(nullif(trim(p_nickname), ''), nickname)
+  set
+    auth_user_id = v_uid,
+    nickname = coalesce(nullif(trim(p_nickname), ''), nickname)
   where user_key = p_user_key and auth_user_id is null;
 
   if found then
     insert into public.app_data (user_key)
     select p_user_key
-    where not exists (select 1 from public.app_data where user_key = p_user_key);
+    where not exists (
+      select 1 from public.app_data where user_key = p_user_key
+    );
     return;
   end if;
 
@@ -159,7 +130,8 @@ begin
     where user_key = p_user_key and auth_user_id = v_uid
   ) then
     if p_nickname is not null and trim(p_nickname) <> '' then
-      update public.profiles set nickname = trim(p_nickname)
+      update public.profiles
+      set nickname = trim(p_nickname)
       where user_key = p_user_key and auth_user_id = v_uid;
     end if;
     return;
@@ -170,7 +142,11 @@ begin
   end if;
 
   insert into public.profiles (user_key, nickname, auth_user_id)
-  values (p_user_key, coalesce(nullif(trim(p_nickname), ''), p_user_key), v_uid);
+  values (
+    p_user_key,
+    coalesce(nullif(trim(p_nickname), ''), p_user_key),
+    v_uid
+  );
 
   insert into public.app_data (user_key) values (p_user_key);
 end;
@@ -178,13 +154,8 @@ $$;
 
 revoke all on function public.get_user_key_auth_status(text) from public;
 grant execute on function public.get_user_key_auth_status(text) to anon, authenticated;
+
 revoke all on function public.claim_profile(text, text) from public;
 grant execute on function public.claim_profile(text, text) to authenticated;
 
-grant usage on schema public to anon, authenticated;
-grant all on public.profiles to anon, authenticated;
-grant all on public.app_data to anon, authenticated;
-
 notify pgrst, 'reload schema';
-
--- ▲▲▲ Run 후 Supabase → Authentication → Email → Confirm email 끄기 ▲▲▲

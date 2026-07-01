@@ -1,10 +1,6 @@
+import { getAuthenticatedProfile } from './authAccount.js'
 import { getClient } from './supabaseBrowser.js'
-
-const USER_KEY_RE = /^[a-zA-Z0-9가-힣_-]{3,32}$/
-
-const DEFAULT_ANNUAL = { columns: [], weekData: {} }
-const DEFAULT_WEEKLY = {}
-const DEFAULT_HABIT = {}
+import { isValidUserKey, normalizeUserKey } from './userIdentity.js'
 
 function toUserMessage(error) {
   const code = error?.code || ''
@@ -19,6 +15,9 @@ function toUserMessage(error) {
   if (message.includes('JWT') || message.includes('apikey')) {
     return 'Supabase API 키가 올바르지 않습니다. .env.local 의 VITE_SUPABASE_ANON_KEY 를 확인해 주세요.'
   }
+  if (message.includes('로그인')) {
+    return message
+  }
 
   return message
 }
@@ -29,75 +28,48 @@ function wrapError(error) {
   return err
 }
 
-export function normalizeUserKey(raw) {
-  return String(raw ?? '')
-    .trim()
-    .toLowerCase()
-}
-
-export function isValidUserKey(userKey) {
-  return USER_KEY_RE.test(userKey)
-}
-
-async function ensureProfile(userKey, nickname) {
-  const supabase = getClient()
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('user_key')
-    .eq('user_key', userKey)
-    .maybeSingle()
-
-  if (profile) return
-
-  const { error: profileError } = await supabase.from('profiles').insert({
-    user_key: userKey,
-    nickname: nickname || userKey,
-  })
-
-  if (profileError) throw wrapError(profileError)
-
-  const { error: dataError } = await supabase.from('app_data').insert({
-    user_key: userKey,
-    annual_data: DEFAULT_ANNUAL,
-    weekly_data: DEFAULT_WEEKLY,
-    habit_data: DEFAULT_HABIT,
-  })
-
-  if (dataError) throw wrapError(dataError)
-}
-
-export async function loadAppData(userKey) {
-  if (!isValidUserKey(userKey)) {
-    throw new Error('고유 ID 형식이 올바르지 않습니다')
+async function requireProfile() {
+  const profile = await getAuthenticatedProfile()
+  if (!profile?.user_key) {
+    throw new Error('로그인이 필요합니다')
   }
+  return profile
+}
 
-  await ensureProfile(userKey)
+export { isValidUserKey, normalizeUserKey }
+
+export async function loadAppData() {
+  const profile = await requireProfile()
   const supabase = getClient()
 
   const { data, error } = await supabase
     .from('app_data')
     .select('annual_data, weekly_data, habit_data, updated_at')
-    .eq('user_key', userKey)
+    .eq('user_key', profile.user_key)
     .single()
 
   if (error) throw wrapError(error)
   return data
 }
 
-export async function saveAppData(userKey, payload = {}) {
-  if (!isValidUserKey(userKey)) {
-    throw new Error('고유 ID 형식이 올바르지 않습니다')
+export async function saveAppData(payload = {}) {
+  const profile = await requireProfile()
+  const supabase = getClient()
+
+  if (payload.nickname?.trim()) {
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({ nickname: payload.nickname.trim() })
+      .eq('user_key', profile.user_key)
+
+    if (profileError) throw wrapError(profileError)
   }
 
-  await ensureProfile(userKey, payload.nickname)
-
-  const patch = { user_key: userKey }
+  const patch = { user_key: profile.user_key }
   if (payload.annual_data !== undefined) patch.annual_data = payload.annual_data
   if (payload.weekly_data !== undefined) patch.weekly_data = payload.weekly_data
   if (payload.habit_data !== undefined) patch.habit_data = payload.habit_data
 
-  const supabase = getClient()
   const { data, error } = await supabase
     .from('app_data')
     .upsert(patch)

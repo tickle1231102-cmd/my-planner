@@ -7,6 +7,14 @@ import {
   useRef,
   useState,
 } from 'react'
+import {
+  getAuthenticatedProfile,
+  getUserKeyAuthStatus,
+  linkLegacyUserKey,
+  registerWithUserKey,
+  signInWithUserKey,
+  signOutAccount,
+} from '../lib/authAccount.js'
 import { fetchAppData, isSupabaseConfigured, persistAppData } from '../lib/cloudApi.js'
 import {
   hasLocalHabitData,
@@ -26,7 +34,6 @@ import {
 import {
   clearUserKey,
   getSavedUserKey,
-  normalizeUserKey,
   saveUserKey,
 } from '../lib/userIdentity.js'
 
@@ -77,39 +84,74 @@ export function CloudSyncProvider({ children }) {
     setError('')
   }, [])
 
-  const flushSave = useCallback(
-    async (key) => {
-      const patch = pendingSaveRef.current
-      pendingSaveRef.current = {}
+  const hydrateAfterAuth = useCallback(async (key, name = '') => {
+    let cloud = await fetchAppData()
 
-      if (!key || !cloudEnabled || localOnly || Object.keys(patch).length === 0) {
-        return
+    if (isCloudEmpty(cloud) && hasLocalData()) {
+      const annual_data = loadAnnualFromLocal() || {
+        columns: DEFAULT_COLUMNS,
+        weekData: {},
       }
+      const weekly_data = loadWeeklyFromLocal()
+      const habit_data = loadHabitData()
+      cloud = await persistAppData({
+        nickname: name || undefined,
+        annual_data,
+        weekly_data,
+        habit_data,
+      })
+    } else if (isHabitDataEmpty(cloud.habit_data) && hasLocalHabitData()) {
+      cloud = await persistAppData({
+        habit_data: loadHabitData(),
+      })
+    } else if (name) {
+      cloud = await persistAppData({ nickname: name })
+    }
 
-      setSyncing(true)
-      try {
-        const data = await persistAppData(key, patch)
-        if (data?.annual_data) {
-          setAnnualData(withDefaultAnnual(data.annual_data))
-          saveAnnualToLocal(data.annual_data)
-        }
-        if (data?.weekly_data) {
-          setWeeklyData(data.weekly_data)
-          saveWeeklyToLocal(data.weekly_data)
-        }
-        if (data?.habit_data) {
-          setHabitData(data.habit_data)
-          saveHabitData(data.habit_data)
-        }
-        setError('')
-      } catch (err) {
-        setError(err instanceof Error ? err.message : '동기화 실패')
-      } finally {
-        setSyncing(false)
+    const profile = await getAuthenticatedProfile()
+
+    saveUserKey(key)
+    setUserKey(key)
+    setNickname(profile?.nickname || name || '')
+    setAnnualData(withDefaultAnnual(cloud.annual_data))
+    setWeeklyData(cloud.weekly_data || {})
+    setHabitData(cloud.habit_data || {})
+    saveAnnualToLocal(cloud.annual_data)
+    saveWeeklyToLocal(cloud.weekly_data || {})
+    saveHabitData(cloud.habit_data || {})
+    setError('')
+  }, [])
+
+  const flushSave = useCallback(async () => {
+    const patch = pendingSaveRef.current
+    pendingSaveRef.current = {}
+
+    if (!cloudEnabled || localOnly || Object.keys(patch).length === 0) {
+      return
+    }
+
+    setSyncing(true)
+    try {
+      const data = await persistAppData(patch)
+      if (data?.annual_data) {
+        setAnnualData(withDefaultAnnual(data.annual_data))
+        saveAnnualToLocal(data.annual_data)
       }
-    },
-    [cloudEnabled, localOnly],
-  )
+      if (data?.weekly_data) {
+        setWeeklyData(data.weekly_data)
+        saveWeeklyToLocal(data.weekly_data)
+      }
+      if (data?.habit_data) {
+        setHabitData(data.habit_data)
+        saveHabitData(data.habit_data)
+      }
+      setError('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '동기화 실패')
+    } finally {
+      setSyncing(false)
+    }
+  }, [cloudEnabled, localOnly])
 
   const scheduleSave = useCallback(
     (patch) => {
@@ -125,17 +167,14 @@ export function CloudSyncProvider({ children }) {
 
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
       saveTimerRef.current = setTimeout(() => {
-        flushSave(userKey)
+        flushSave()
       }, SAVE_DELAY_MS)
     },
     [cloudEnabled, flushSave, localOnly, userKey],
   )
 
-  const login = useCallback(
-    async (rawKey, rawNickname) => {
-      const key = normalizeUserKey(rawKey)
-      const name = rawNickname?.trim() || ''
-
+  const runAuthAction = useCallback(
+    async (action) => {
       setLoading(true)
       setError('')
 
@@ -144,39 +183,10 @@ export function CloudSyncProvider({ children }) {
           throw new Error('SUPABASE_NOT_CONFIGURED')
         }
 
-        let cloud = await fetchAppData(key)
-
-        if (isCloudEmpty(cloud) && hasLocalData()) {
-          const annual_data = loadAnnualFromLocal() || {
-            columns: DEFAULT_COLUMNS,
-            weekData: {},
-          }
-          const weekly_data = loadWeeklyFromLocal()
-          const habit_data = loadHabitData()
-          cloud = await persistAppData(key, {
-            nickname: name || undefined,
-            annual_data,
-            weekly_data,
-            habit_data,
-          })
-        } else if (isHabitDataEmpty(cloud.habit_data) && hasLocalHabitData()) {
-          cloud = await persistAppData(key, {
-            habit_data: loadHabitData(),
-          })
-        } else if (name) {
-          cloud = await persistAppData(key, { nickname: name })
-        }
-
-        saveUserKey(key)
-        setUserKey(key)
-        setNickname(name)
+        const key = await action()
+        const profile = await getAuthenticatedProfile()
+        await hydrateAfterAuth(key, profile?.nickname || '')
         setLocalOnly(false)
-        setAnnualData(withDefaultAnnual(cloud.annual_data))
-        setWeeklyData(cloud.weekly_data || {})
-        setHabitData(cloud.habit_data || {})
-        saveAnnualToLocal(cloud.annual_data)
-        saveWeeklyToLocal(cloud.weekly_data || {})
-        saveHabitData(cloud.habit_data || {})
         setReady(true)
       } catch (err) {
         const message = err instanceof Error ? err.message : '연결 실패'
@@ -192,7 +202,39 @@ export function CloudSyncProvider({ children }) {
         setLoading(false)
       }
     },
+    [cloudEnabled, hydrateAfterAuth],
+  )
+
+  const checkUserKeyStatus = useCallback(
+    async (rawKey) => {
+      if (!cloudEnabled) {
+        throw new Error('SUPABASE_NOT_CONFIGURED')
+      }
+      return getUserKeyAuthStatus(rawKey)
+    },
     [cloudEnabled],
+  )
+
+  const signIn = useCallback(
+    (rawKey, password) =>
+      runAuthAction(() => signInWithUserKey(rawKey, password)),
+    [runAuthAction],
+  )
+
+  const register = useCallback(
+    (rawKey, password, rawNickname) =>
+      runAuthAction(() =>
+        registerWithUserKey(rawKey, password, rawNickname?.trim() || ''),
+      ),
+    [runAuthAction],
+  )
+
+  const setLegacyPassword = useCallback(
+    (rawKey, password, rawNickname) =>
+      runAuthAction(() =>
+        linkLegacyUserKey(rawKey, password, rawNickname?.trim() || ''),
+      ),
+    [runAuthAction],
   )
 
   const useLocalMode = useCallback(() => {
@@ -201,9 +243,14 @@ export function CloudSyncProvider({ children }) {
     setLoading(false)
   }, [finishLocalSession])
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     pendingSaveRef.current = {}
+
+    if (cloudEnabled && !localOnly) {
+      await signOutAccount()
+    }
+
     clearUserKey()
     setUserKey(null)
     setNickname('')
@@ -212,28 +259,53 @@ export function CloudSyncProvider({ children }) {
     setAnnualData(withDefaultAnnual(loadAnnualFromLocal()))
     setWeeklyData(loadWeeklyFromLocal())
     setHabitData(loadHabitData())
-  }, [])
+  }, [cloudEnabled, localOnly])
 
   useEffect(() => {
-    const saved = getSavedUserKey()
-    if (!saved) {
-      setLoading(false)
-      return
+    let cancelled = false
+
+    async function restore() {
+      const saved = getSavedUserKey()
+
+      if (!cloudEnabled || saved === LOCAL_USER_KEY) {
+        if (saved === LOCAL_USER_KEY || (!cloudEnabled && saved)) {
+          setLocalOnly(true)
+          finishLocalSession(
+            saved === LOCAL_USER_KEY ? LOCAL_USER_KEY : saved,
+            saved === LOCAL_USER_KEY ? '로컬 저장' : '',
+          )
+        }
+        if (!cancelled) setLoading(false)
+        return
+      }
+
+      try {
+        const profile = await getAuthenticatedProfile()
+        if (!profile?.user_key) {
+          if (saved) clearUserKey()
+          if (!cancelled) setLoading(false)
+          return
+        }
+
+        await hydrateAfterAuth(profile.user_key, profile.nickname || '')
+        if (!cancelled) {
+          setLocalOnly(false)
+          setReady(true)
+          setLoading(false)
+        }
+      } catch {
+        await signOutAccount()
+        clearUserKey()
+        if (!cancelled) setLoading(false)
+      }
     }
 
-    if (!cloudEnabled || saved === LOCAL_USER_KEY) {
-      setLocalOnly(true)
-      finishLocalSession(saved, saved === LOCAL_USER_KEY ? '로컬 저장' : '')
-      setLoading(false)
-      return
-    }
+    restore()
 
-    login(saved).catch(() => {
-      clearUserKey()
-      setUserKey(null)
-      setLoading(false)
-    })
-  }, [cloudEnabled, finishLocalSession, login])
+    return () => {
+      cancelled = true
+    }
+  }, [cloudEnabled, finishLocalSession, hydrateAfterAuth])
 
   useEffect(() => {
     return () => {
@@ -285,7 +357,10 @@ export function CloudSyncProvider({ children }) {
       annualData,
       weeklyData,
       habitData,
-      login,
+      checkUserKeyStatus,
+      signIn,
+      register,
+      setLegacyPassword,
       logout,
       useLocalMode,
       updateAnnual,
@@ -304,7 +379,10 @@ export function CloudSyncProvider({ children }) {
       annualData,
       weeklyData,
       habitData,
-      login,
+      checkUserKeyStatus,
+      signIn,
+      register,
+      setLegacyPassword,
       logout,
       useLocalMode,
       updateAnnual,

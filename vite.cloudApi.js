@@ -1,4 +1,5 @@
 import { loadEnv } from 'vite'
+import { handleAuthRegister } from './server/auth.js'
 import { handleDataRequest } from './server/cloudData.js'
 
 function readBody(req) {
@@ -35,7 +36,7 @@ export function cloudApiDevPlugin() {
       Object.assign(process.env, env)
 
       server.middlewares.use(async (req, res, next) => {
-        if (!req.url?.startsWith('/api/data')) return next()
+        if (!req.url?.startsWith('/api/')) return next()
 
         if (req.method === 'OPTIONS') {
           res.statusCode = 200
@@ -44,17 +45,20 @@ export function cloudApiDevPlugin() {
         }
 
         try {
-          const body =
-            req.method === 'POST' ? await readBody(req) : undefined
-          const result = await handleDataRequest(
-            req.method,
-            req.url,
-            body,
-          )
+          if (req.url?.startsWith('/api/auth/register') && req.method === 'POST') {
+            const body = await readBody(req)
+            const result = await handleAuthRegister(body)
+            sendJson(res, result.status, result.body)
+            return
+          }
+
+          if (!req.url?.startsWith('/api/data')) return next()
+
+          const body = req.method === 'POST' ? await readBody(req) : undefined
+          const result = await handleDataRequest(req.method, req.url, body)
           sendJson(res, result.status, result.body)
         } catch (error) {
-          const message =
-            error instanceof Error ? error.message : 'server error'
+          const message = error instanceof Error ? error.message : 'server error'
           sendJson(res, 500, { error: message })
         }
       })
