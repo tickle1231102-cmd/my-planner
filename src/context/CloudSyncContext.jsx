@@ -33,6 +33,9 @@ function withDefaultAnnual(annual) {
   return {
     columns: annual?.columns?.length ? annual.columns : DEFAULT_COLUMNS,
     weekData: annual?.weekData || {},
+    dateColors: annual?.dateColors || {},
+    monthGoals: annual?.monthGoals || {},
+    yearGoals: annual?.yearGoals || {},
     year: annual?.year,
   }
 }

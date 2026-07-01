@@ -7,10 +7,14 @@ import {
   useState,
 } from 'react'
 import WeeklyView, { getMondayOfWeek } from './WeeklyView.jsx'
+import YearOverviewCalendar from './YearOverviewCalendar.jsx'
 import UserKeyGate from './components/UserKeyGate.jsx'
 import SupabaseSetup from './components/SupabaseSetup.jsx'
+import { CalendarIcon } from './components/CalendarIcon.jsx'
 import { useCloudSync } from './context/CloudSyncContext.jsx'
 import { DEFAULT_COLUMNS } from './lib/plannerStorage.js'
+import { formatDateLabel } from './lib/dateFormat.js'
+import { padMonthGoals, padYearGoals } from './lib/goalLists.js'
 
 const AVAILABLE_YEARS = [2025, 2026, 2027, 2028]
 const DAY_LABELS = ['월', '화', '수', '목', '금', '토', '일']
@@ -23,11 +27,27 @@ const EARTHLY = ['자', '축', '인', '묘', '진', '사', '오', '미', '신', 
 
 const ROW_MIN_HEIGHT = 36
 const MONTH_COL_WIDTH = 34
-const DAY_COL_MIN = 50
+const DAY_COL_MIN = 33
 const NOTE_COL_MIN = 100
+
+const DATE_COLOR_OPTIONS = [
+  { id: 'red', label: '빨강', swatch: 'bg-red-400', cell: 'bg-red-200/85' },
+  { id: 'orange', label: '주황', swatch: 'bg-orange-400', cell: 'bg-orange-200/85' },
+  { id: 'yellow', label: '노랑', swatch: 'bg-yellow-300', cell: 'bg-yellow-200/85' },
+  { id: 'green', label: '초록', swatch: 'bg-green-400', cell: 'bg-green-200/85' },
+  { id: 'blue', label: '파랑', swatch: 'bg-blue-400', cell: 'bg-blue-200/85' },
+]
+
+const DATE_COLOR_CELL = Object.fromEntries(
+  DATE_COLOR_OPTIONS.map((option) => [option.id, option.cell]),
+)
 
 function pad(n) {
   return String(n).padStart(2, '0')
+}
+
+function formatDateKey(date) {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 
 function isSameDay(a, b) {
@@ -36,11 +56,6 @@ function isSameDay(a, b) {
     a.getMonth() === b.getMonth() &&
     a.getDate() === b.getDate()
   )
-}
-
-function formatDateLabel(date, short = false) {
-  if (short) return `${date.getMonth() + 1}/${date.getDate()}`
-  return `${date.getMonth() + 1}월 ${date.getDate()}일`
 }
 
 function getKoreanZodiac(year) {
@@ -113,18 +128,24 @@ function usePlannerStorage(year) {
 
   const [columns, setColumns] = useState(() => annualData.columns)
   const [weekData, setWeekData] = useState(() => annualData.weekData)
+  const [dateColors, setDateColors] = useState(() => annualData.dateColors || {})
+  const [monthGoals, setMonthGoals] = useState(() => annualData.monthGoals || {})
+  const [yearGoals, setYearGoals] = useState(() => annualData.yearGoals || {})
 
   useEffect(() => {
     if (!ready || hydratedRef.current) return
     setColumns(annualData.columns)
     setWeekData(annualData.weekData)
+    setDateColors(annualData.dateColors || {})
+    setMonthGoals(annualData.monthGoals || {})
+    setYearGoals(annualData.yearGoals || {})
     hydratedRef.current = true
   }, [ready, annualData])
 
   useEffect(() => {
     if (!ready || !hydratedRef.current) return
-    updateAnnual({ year, columns, weekData })
-  }, [year, columns, weekData, ready, updateAnnual])
+    updateAnnual({ year, columns, weekData, dateColors, monthGoals, yearGoals })
+  }, [year, columns, weekData, dateColors, monthGoals, yearGoals, ready, updateAnnual])
 
   const updateCell = useCallback((weekId, columnId, value) => {
     setWeekData((prev) => ({
@@ -155,7 +176,58 @@ function usePlannerStorage(year) {
     })
   }, [])
 
-  return { columns, weekData, updateCell, addColumn, removeColumn }
+  const setDateColor = useCallback((dateKey, colorId) => {
+    setDateColors((prev) => {
+      if (!colorId) {
+        const { [dateKey]: _, ...rest } = prev
+        return rest
+      }
+      return { ...prev, [dateKey]: colorId }
+    })
+  }, [])
+
+  const updateMonthGoal = useCallback((goalYear, month, goalId, updates) => {
+    const monthKey = String(month)
+    setMonthGoals((prev) => {
+      const yearGoals = prev[goalYear] || {}
+      const goals = padMonthGoals(yearGoals[monthKey])
+      return {
+        ...prev,
+        [goalYear]: {
+          ...yearGoals,
+          [monthKey]: goals.map((goal) =>
+            goal.id === goalId ? { ...goal, ...updates } : goal,
+          ),
+        },
+      }
+    })
+  }, [])
+
+  const updateYearGoal = useCallback((goalYear, goalId, updates) => {
+    setYearGoals((prev) => {
+      const goals = padYearGoals(prev[goalYear])
+      return {
+        ...prev,
+        [goalYear]: goals.map((goal) =>
+          goal.id === goalId ? { ...goal, ...updates } : goal,
+        ),
+      }
+    })
+  }, [])
+
+  return {
+    columns,
+    weekData,
+    dateColors,
+    monthGoals,
+    yearGoals,
+    updateCell,
+    setDateColor,
+    updateMonthGoal,
+    updateYearGoal,
+    addColumn,
+    removeColumn,
+  }
 }
 
 function columnHeaderColor(columnId) {
@@ -186,29 +258,48 @@ function ColumnHeader({ column, onRemove }) {
   )
 }
 
-function CalendarCell({ date, year, isToday, isWeekend, compact, onSelect }) {
+function CalendarCell({
+  date,
+  year,
+  isToday,
+  isWeekend,
+  compact,
+  highlightColor,
+  onSelect,
+  onColorMenu,
+}) {
   const inYear = date.getFullYear() === year
+  const customBg = inYear && highlightColor ? DATE_COLOR_CELL[highlightColor] : null
 
   const className = [
     'flex w-full flex-col items-center justify-center gap-0 border-r border-planner-sand/50 text-center leading-none transition last:border-r-0',
     compact
-      ? 'min-h-[34px] px-0.5 py-0.5 text-[10px]'
-      : 'min-h-[36px] px-0.5 py-0.5 text-[11px]',
+      ? 'min-h-[34px] px-0.5 py-0.5 text-[15px]'
+      : 'min-h-[36px] px-0.5 py-0.5 text-[16.5px]',
     !inYear && 'text-planner-ink-muted/35',
-    inYear && isWeekend && !isToday && 'bg-planner-weekend/60',
-    isToday && 'bg-planner-today font-semibold text-planner-ink ring-1 ring-inset ring-planner-today-ring/50',
-    onSelect && inYear && 'cursor-pointer hover:bg-planner-sage-light/50 active:bg-planner-sage-light',
+    inYear && !customBg && isWeekend && !isToday && 'bg-planner-weekend',
+    customBg,
+    isToday && !customBg && 'bg-planner-today',
+    isToday && 'font-semibold text-planner-ink ring-1 ring-inset ring-planner-today-ring/50',
+    onSelect && inYear && !customBg && 'cursor-pointer hover:bg-planner-sage-light/50 active:bg-planner-sage-light',
+    onSelect && inYear && customBg && 'cursor-pointer hover:brightness-95 active:brightness-90',
   ]
     .filter(Boolean)
     .join(' ')
 
+  const handleContextMenu = (event) => {
+    if (!inYear || !onColorMenu) return
+    event.preventDefault()
+    onColorMenu(date, event)
+  }
+
   const content = (
     <>
       <span className={inYear ? 'text-planner-ink' : ''}>
-        {formatDateLabel(date, true)}
+        {formatDateLabel(date)}
       </span>
       {isToday && (
-        <span className="mt-px text-[8px] font-medium leading-none text-planner-today-ring">
+        <span className="mt-px text-[12px] font-medium leading-none text-planner-today-ring">
           오늘
         </span>
       )}
@@ -217,13 +308,88 @@ function CalendarCell({ date, year, isToday, isWeekend, compact, onSelect }) {
 
   if (onSelect && inYear) {
     return (
-      <button type="button" onClick={() => onSelect(date)} className={className}>
+      <button
+        type="button"
+        onClick={() => onSelect(date)}
+        onContextMenu={handleContextMenu}
+        className={className}
+      >
         {content}
       </button>
     )
   }
 
-  return <div className={className}>{content}</div>
+  return (
+    <div onContextMenu={handleContextMenu} className={className}>
+      {content}
+    </div>
+  )
+}
+
+function DateColorMenu({ x, y, currentColor, onSelect, onClose }) {
+  const menuRef = useRef(null)
+
+  useEffect(() => {
+    const handlePointer = (event) => {
+      if (menuRef.current?.contains(event.target)) return
+      onClose()
+    }
+
+    const handleKey = (event) => {
+      if (event.key === 'Escape') onClose()
+    }
+
+    window.addEventListener('pointerdown', handlePointer)
+    window.addEventListener('keydown', handleKey)
+    window.addEventListener('scroll', onClose, true)
+    window.addEventListener('resize', onClose)
+
+    return () => {
+      window.removeEventListener('pointerdown', handlePointer)
+      window.removeEventListener('keydown', handleKey)
+      window.removeEventListener('scroll', onClose, true)
+      window.removeEventListener('resize', onClose)
+    }
+  }, [onClose])
+
+  return (
+    <div
+      ref={menuRef}
+      className="fixed z-50 min-w-[148px] rounded-xl border border-planner-sand bg-white p-2 shadow-soft"
+      style={{ left: x, top: y }}
+      role="menu"
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      <p className="px-2 pb-1.5 text-[10px] font-medium text-planner-ink-muted">날짜 색상</p>
+      {DATE_COLOR_OPTIONS.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          role="menuitem"
+          onClick={() => onSelect(option.id)}
+          className={[
+            'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs text-planner-ink transition hover:bg-planner-warm',
+            currentColor === option.id && 'bg-planner-sage-light/70',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        >
+          <span className={`size-3.5 shrink-0 rounded-full ${option.swatch} ring-1 ring-planner-sand/60`} />
+          {option.label}
+        </button>
+      ))}
+      {currentColor && (
+        <button
+          type="button"
+          role="menuitem"
+          onClick={() => onSelect(null)}
+          className="mt-1 w-full rounded-lg border-t border-planner-sand/80 px-2 py-1.5 pt-2 text-left text-xs text-planner-ink-muted transition hover:bg-planner-warm"
+        >
+          기본 색상
+        </button>
+      )}
+    </div>
+  )
 }
 
 function AddColumnModal({ open, onClose, onAdd }) {
@@ -347,10 +513,20 @@ function YearNavigator({ year, onChange }) {
 }
 
 function scrollToTodayAnchor(behavior = 'smooth') {
-  const todayEl = [...document.querySelectorAll('[data-today-anchor]')].find(
+  const main = document.querySelector('main')
+  const todayEl = [...document.querySelectorAll('[data-today-anchor="true"]')].find(
     (el) => el.getClientRects().length > 0,
   )
   if (!todayEl) return false
+
+  if (main) {
+    const mainRect = main.getBoundingClientRect()
+    const elRect = todayEl.getBoundingClientRect()
+    const targetTop =
+      elRect.top - mainRect.top + main.scrollTop - main.clientHeight / 2 + elRect.height / 2
+    main.scrollTo({ top: Math.max(0, targetTop), behavior })
+    return true
+  }
 
   todayEl.scrollIntoView({ behavior, block: 'center' })
   return true
@@ -362,15 +538,17 @@ function PlannerGrid({
   today,
   columns,
   weekData,
+  dateColors,
   updateCell,
   removeColumn,
   onAddColumn,
   monthSpans,
   compact,
   onDateSelect,
+  onColorMenu,
 }) {
   const monthCol = compact ? '30px' : `${MONTH_COL_WIDTH}px`
-  const dayCol = compact ? `minmax(40px, 1fr)` : `minmax(${DAY_COL_MIN}px, 1fr)`
+  const dayCol = compact ? `minmax(27px, 1fr)` : `minmax(${DAY_COL_MIN}px, 1fr)`
   const noteCol = compact ? `minmax(100px, 1fr)` : `minmax(${NOTE_COL_MIN}px, 1fr)`
 
   const gridCols = `${monthCol} repeat(7, ${dayCol}) ${columns.map(() => noteCol).join(' ')} 36px`
@@ -408,7 +586,7 @@ function PlannerGrid({
           <div
             key={day}
             className={[
-              'sticky top-0 z-10 flex items-center justify-center border-b border-r border-planner-sand/60 py-1 text-[11px] font-medium last:border-r-0',
+              'sticky top-0 z-10 flex items-center justify-center border-b border-r border-planner-sand/60 py-1 text-[16.5px] font-medium last:border-r-0',
               i >= 5
                 ? 'bg-planner-sage-light/80 text-planner-sage'
                 : 'bg-planner-sage-light text-planner-sage',
@@ -444,6 +622,7 @@ function PlannerGrid({
 
               {week.days.map((date, i) => {
                 const isToday = isSameDay(date, today) && year === today.getFullYear()
+                const dateKey = formatDateKey(date)
                 return (
                   <div
                     key={i}
@@ -456,7 +635,9 @@ function PlannerGrid({
                       isToday={isToday}
                       isWeekend={i >= 5}
                       compact={compact}
+                      highlightColor={dateColors[dateKey]}
                       onSelect={onDateSelect}
+                      onColorMenu={onColorMenu}
                     />
                   </div>
                 )
@@ -487,23 +668,36 @@ function PlannerGrid({
   )
 }
 
-function MobileCalendar({ weeks, year, today, monthSpans, onDateSelect }) {
+function MobileCalendar({ weeks, year, today, monthSpans, dateColors, onDateSelect, onColorMenu }) {
+  const dayCol = `minmax(27px, 1fr)`
+
   return (
     <div className="overflow-x-auto">
       <div
         className="min-w-max"
         style={{
           display: 'grid',
-          gridTemplateColumns: `30px repeat(7, minmax(40px, 1fr))`,
+          gridTemplateColumns: `30px repeat(7, ${dayCol})`,
         }}
       >
-        <div className="border-b border-r border-planner-sand bg-planner-warm" />
-        <div className="col-span-7 border-b border-r border-planner-sand bg-planner-sage-light/40" />
+        <div
+          className="border-b border-r border-planner-sand bg-planner-warm"
+          style={{ gridColumn: 1 }}
+        />
+        <div
+          className="border-b border-r border-planner-sand bg-planner-sage-light/40"
+          style={{ gridColumn: '2 / 9' }}
+        />
+        <div
+          className="border-b border-r border-planner-sand bg-planner-warm"
+          style={{ gridColumn: 1 }}
+        />
         {DAY_LABELS.map((day, i) => (
           <div
             key={day}
+            style={{ gridColumn: i + 2 }}
             className={[
-              'flex items-center justify-center border-b border-r border-planner-sand/60 py-1 text-[10px] font-medium',
+              'flex items-center justify-center border-b border-r border-planner-sand/60 py-1 text-[15px] font-medium',
               i >= 5 ? 'bg-planner-sage-light/80 text-planner-sage' : 'bg-planner-sage-light text-planner-sage',
             ].join(' ')}
           >
@@ -521,17 +715,23 @@ function MobileCalendar({ weeks, year, today, monthSpans, onDateSelect }) {
               {monthInfo && (
                 <div
                   className="flex items-center justify-center border-b border-r border-planner-sand text-[10px] font-medium text-planner-ink-muted"
-                  style={{ gridRow: `span ${monthInfo.count}`, backgroundColor: 'rgba(240, 235, 227, 0.85)' }}
+                  style={{
+                    gridColumn: 1,
+                    gridRow: `span ${monthInfo.count}`,
+                    backgroundColor: 'rgba(240, 235, 227, 0.85)',
+                  }}
                 >
                   {MONTH_LABELS[monthInfo.month]}
                 </div>
               )}
               {week.days.map((date, i) => {
                 const isToday = isSameDay(date, today) && year === today.getFullYear()
+                const dateKey = formatDateKey(date)
                 return (
                   <div
                     key={i}
                     data-today-anchor={isToday ? 'true' : undefined}
+                    style={{ gridColumn: i + 2 }}
                     className={`border-b border-planner-sand/60 ${rowBg} ${isToday ? 'scroll-mt-28' : ''}`}
                   >
                     <CalendarCell
@@ -540,7 +740,9 @@ function MobileCalendar({ weeks, year, today, monthSpans, onDateSelect }) {
                       isToday={isToday}
                       isWeekend={i >= 5}
                       compact
+                      highlightColor={dateColors[dateKey]}
                       onSelect={onDateSelect}
+                      onColorMenu={onColorMenu}
                     />
                   </div>
                 )
@@ -666,20 +868,55 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
   const weeks = useMemo(() => generateWeeks(year), [year])
   const monthSpans = useMemo(() => buildMonthSpans(weeks), [weeks])
 
-  const { columns, weekData, updateCell, addColumn, removeColumn } =
+  const { columns, weekData, dateColors, monthGoals, yearGoals, updateCell, setDateColor, updateMonthGoal, updateYearGoal, addColumn, removeColumn } =
     usePlannerStorage(year)
 
   const hasScrolledRef = useRef(false)
+  const pendingTodayScrollRef = useRef(false)
   const touchStartRef = useRef(null)
 
   const [mobileTab, setMobileTab] = useState('calendar')
   const [showAddColumn, setShowAddColumn] = useState(false)
   const [view, setView] = useState('annual')
   const [selectedWeekMonday, setSelectedWeekMonday] = useState(null)
+  const [todayScrollTick, setTodayScrollTick] = useState(0)
+  const [colorMenu, setColorMenu] = useState(null)
+
+  const openColorMenu = useCallback((date, event) => {
+    if (date.getFullYear() !== year) return
+    setColorMenu({
+      x: event.clientX,
+      y: event.clientY,
+      dateKey: formatDateKey(date),
+    })
+  }, [year])
+
+  const closeColorMenu = useCallback(() => {
+    setColorMenu(null)
+  }, [])
+
+  const handleColorSelect = useCallback((colorId) => {
+    if (!colorMenu) return
+    setDateColor(colorMenu.dateKey, colorId)
+    setColorMenu(null)
+  }, [colorMenu, setDateColor])
+
+  const changeWeek = useCallback((monday) => {
+    setSelectedWeekMonday(monday)
+  }, [])
 
   const openWeek = useCallback((date) => {
+    const dateYear = date.getFullYear()
+    if (AVAILABLE_YEARS.includes(dateYear) && dateYear !== year) {
+      setYear(dateYear)
+    }
     setSelectedWeekMonday(getMondayOfWeek(date))
     setView('weekly')
+  }, [year])
+
+  const toggleYearOverview = useCallback(() => {
+    setColorMenu(null)
+    setView((current) => (current === 'yearOverview' ? 'annual' : 'yearOverview'))
   }, [])
 
   const backToAnnual = useCallback(() => {
@@ -691,19 +928,36 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
     setYear(nextYear)
   }, [])
 
-  const scrollToToday = useCallback((behavior = 'smooth') => {
-    scrollToTodayAnchor(behavior)
-  }, [])
+  const goToToday = useCallback(() => {
+    if (view === 'weekly') {
+      setView('annual')
+      setSelectedWeekMonday(null)
+    }
+    if (view === 'yearOverview') {
+      setView('annual')
+    }
+
+    const todayYear = today.getFullYear()
+    if (year !== todayYear && AVAILABLE_YEARS.includes(todayYear)) {
+      hasScrolledRef.current = false
+      setYear(todayYear)
+    }
+
+    pendingTodayScrollRef.current = true
+    setMobileTab('calendar')
+    setTodayScrollTick((t) => t + 1)
+  }, [view, year, today])
 
   useLayoutEffect(() => {
     if (view !== 'annual') return
-    if (hasScrolledRef.current) return
     if (mobileTab !== 'calendar') return
     if (year !== today.getFullYear()) return
+    if (!pendingTodayScrollRef.current && hasScrolledRef.current) return
 
     const tryScroll = () => {
       if (scrollToTodayAnchor('smooth')) {
         hasScrolledRef.current = true
+        pendingTodayScrollRef.current = false
       }
     }
 
@@ -717,9 +971,9 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
       clearTimeout(timer)
       clearTimeout(retry)
     }
-  }, [weeks, mobileTab, view, year, today])
+  }, [weeks, mobileTab, view, year, today, todayScrollTick])
 
-  const showTodayButton = year === today.getFullYear()
+  const showTodayButton = AVAILABLE_YEARS.includes(today.getFullYear())
 
   useEffect(() => {
     if (view !== 'annual' || year === today.getFullYear()) return
@@ -732,7 +986,10 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
         <WeeklyView
           weekMonday={selectedWeekMonday}
           onBack={backToAnnual}
+          onWeekChange={changeWeek}
           today={today}
+          monthGoals={monthGoals}
+          onUpdateMonthGoal={updateMonthGoal}
         />
       </div>
     )
@@ -757,11 +1014,29 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
       <header className="sticky top-0 z-40 border-b border-planner-sand bg-planner-cream/90 backdrop-blur-md">
         <div className="mx-auto flex max-w-[1600px] items-center justify-between px-4 py-3 sm:px-6">
           <div>
-            <h1 className="text-lg font-medium tracking-tight text-planner-ink sm:text-xl">
-              연간 플래너
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-medium tracking-tight text-planner-ink sm:text-xl">
+                연간 플래너
+              </h1>
+              <button
+                type="button"
+                onClick={toggleYearOverview}
+                aria-label={view === 'yearOverview' ? '플래너 보기' : '연간 캘린더 보기'}
+                aria-pressed={view === 'yearOverview'}
+                className={[
+                  'rounded-lg p-1.5 transition',
+                  view === 'yearOverview'
+                    ? 'bg-planner-sage text-white'
+                    : 'text-planner-sage hover:bg-planner-sage-light',
+                ].join(' ')}
+              >
+                <CalendarIcon className="size-5" />
+              </button>
+            </div>
             <p className="text-xs text-planner-ink-muted sm:text-sm">
-              날짜를 눌러 주간 플래너로 이동하세요
+              {view === 'yearOverview'
+                ? '12개월 연간 캘린더 · 날짜를 누르면 주간 플래너로 이동합니다'
+                : '날짜를 눌러 주간 플래너로 이동하세요'}
             </p>
             <p className="mt-0.5 text-[11px] text-planner-sage">
               {nickname || userKey}
@@ -783,7 +1058,7 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
             {showTodayButton && (
               <button
                 type="button"
-                onClick={scrollToToday}
+                onClick={goToToday}
                 className="rounded-full border border-planner-sage-muted/50 bg-planner-sage-light px-4 py-1.5 text-xs font-medium text-planner-sage transition hover:bg-planner-sage hover:text-white sm:text-sm"
               >
                 오늘로 이동
@@ -792,7 +1067,9 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
           </div>
         </div>
         <YearNavigator year={year} onChange={changeYear} />
-        <MobileTabBar active={mobileTab} onChange={setMobileTab} />
+        {view !== 'yearOverview' && (
+          <MobileTabBar active={mobileTab} onChange={setMobileTab} />
+        )}
       </header>
 
       <main
@@ -801,6 +1078,22 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
         onTouchEnd={handleTouchEnd}
       >
         <div className="mx-auto max-w-[1600px] p-2 sm:p-3">
+          {view === 'yearOverview' ? (
+            <YearOverviewCalendar
+              year={year}
+              today={today}
+              onDateSelect={openWeek}
+              monthGoals={monthGoals[year] || {}}
+              yearGoals={yearGoals[year]}
+              onUpdateMonthGoal={(month, goalId, updates) =>
+                updateMonthGoal(year, month, goalId, updates)
+              }
+              onUpdateYearGoal={(goalId, updates) =>
+                updateYearGoal(year, goalId, updates)
+              }
+            />
+          ) : (
+            <>
           <div className="hidden overflow-hidden rounded-2xl border border-planner-sand bg-white shadow-soft lg:block">
             <PlannerGrid
               weeks={weeks}
@@ -808,11 +1101,13 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
               today={today}
               columns={columns}
               weekData={weekData}
+              dateColors={dateColors}
               updateCell={updateCell}
               removeColumn={removeColumn}
               onAddColumn={() => setShowAddColumn(true)}
               monthSpans={monthSpans}
               onDateSelect={openWeek}
+              onColorMenu={openColorMenu}
             />
           </div>
 
@@ -823,7 +1118,9 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
                 year={year}
                 today={today}
                 monthSpans={monthSpans}
+                dateColors={dateColors}
                 onDateSelect={openWeek}
+                onColorMenu={openColorMenu}
               />
             ) : (
               <MobileNotes
@@ -840,6 +1137,8 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
           <p className="mt-3 text-center text-xs text-planner-ink-muted/60 lg:hidden">
             좌우로 스와이프하여 달력과 일정을 전환할 수 있어요
           </p>
+            </>
+          )}
         </div>
       </main>
 
@@ -848,6 +1147,16 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
         onClose={() => setShowAddColumn(false)}
         onAdd={addColumn}
       />
+
+      {colorMenu && (
+        <DateColorMenu
+          x={colorMenu.x}
+          y={colorMenu.y}
+          currentColor={dateColors[colorMenu.dateKey]}
+          onSelect={handleColorSelect}
+          onClose={closeColorMenu}
+        />
+      )}
     </div>
   )
 }

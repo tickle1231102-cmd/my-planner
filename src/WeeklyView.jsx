@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useCloudSync } from './context/CloudSyncContext.jsx'
+import { formatDateWithWeekday, formatWeekRange } from './lib/dateFormat.js'
+import { getDominantMonthAndYear } from './lib/monthGoals.js'
+import { padMonthGoals, padWeekGoals } from './lib/goalLists.js'
+import MonthGoalChecklist from './components/MonthGoalChecklist.jsx'
 
 const WEEKLY_STORAGE_KEY = 'weekly-planner-v2'
 const DAY_LABELS = ['월', '화', '수', '목', '금', '토', '일']
@@ -8,9 +12,13 @@ const HOURS = Array.from({ length: 24 }, (_, i) => (START_HOUR + i) % 24)
 const SLOTS_PER_HOUR = 6
 const TIMETABLE_ROW_HEIGHT = 24
 const TASK_LINES = HOURS.length
+const DAY_TASK_LINES = TASK_LINES - 3
 const TASK_ROW_HEIGHT = TIMETABLE_ROW_HEIGHT
 const TASK_HEADER_HEIGHT = 26
-const SIDEBAR_TODO_LINES = 10
+const DAY_NOTE_HEIGHT = 72
+const TIMETABLE_CELL_BORDER = 'border-planner-sage-muted/30'
+const HOUR_LABEL_WIDTH = 'w-6'
+const DAY_COLUMN_MIN_WIDTH = 'min-w-[84px]'
 
 function pad(n) {
   return String(n).padStart(2, '0')
@@ -29,19 +37,8 @@ function getWeekDays(monday) {
   })
 }
 
-function formatWeekRange(days) {
-  const start = days[0]
-  const end = days[6]
-  if (start.getMonth() === end.getMonth()) {
-    return `${start.getMonth() + 1}월 ${start.getDate()}일 – ${end.getDate()}일`
-  }
-  return `${start.getMonth() + 1}/${start.getDate()} – ${end.getMonth() + 1}/${end.getDate()}`
-}
-
 function formatHourLabel(hour) {
-  if (hour === 0 || hour === 12) return '12'
-  if (hour < 12) return String(hour)
-  return String(hour - 12)
+  return String(hour)
 }
 
 function isSameDay(a, b) {
@@ -53,7 +50,7 @@ function isSameDay(a, b) {
 }
 
 function createDayTasks() {
-  return Array.from({ length: TASK_LINES }, (_, i) => ({
+  return Array.from({ length: DAY_TASK_LINES }, (_, i) => ({
     id: `task-${i}`,
     text: '',
     done: false,
@@ -62,34 +59,51 @@ function createDayTasks() {
 
 function padDayTasks(tasks) {
   const padded = [...(tasks || [])]
-  while (padded.length < TASK_LINES) {
+  while (padded.length < DAY_TASK_LINES) {
     padded.push({
       id: `task-${padded.length}`,
       text: '',
       done: false,
     })
   }
-  return padded.slice(0, TASK_LINES).map((t, i) => ({
+  return padded.slice(0, DAY_TASK_LINES).map((t, i) => ({
     id: t.id || `task-${i}`,
     text: t.text || '',
     done: !!t.done,
   }))
 }
 
-function createSidebarTodos() {
-  return Array.from({ length: SIDEBAR_TODO_LINES }, (_, i) => ({
-    id: `todo-${i}`,
-    text: '',
-    done: false,
-  }))
+function defaultDayNotes() {
+  return Object.fromEntries(Array.from({ length: 7 }, (_, i) => [i, '']))
+}
+
+function migrateMemo(raw) {
+  if (typeof raw?.memo === 'string') return raw.memo
+  if (raw?.todos?.length) {
+    return raw.todos
+      .map((item) => item.text)
+      .filter(Boolean)
+      .join('\n')
+  }
+  return ''
+}
+
+function normalizeDayNotes(raw) {
+  const notes = defaultDayNotes()
+  if (!raw?.dayNotes) return notes
+  for (let i = 0; i < 7; i++) {
+    notes[i] = raw.dayNotes[i] ?? raw.dayNotes[String(i)] ?? ''
+  }
+  return notes
 }
 
 function defaultWeekData() {
   const dayTasks = {}
   for (let i = 0; i < 7; i++) dayTasks[i] = createDayTasks()
   return {
-    goal: '',
-    todos: createSidebarTodos(),
+    weekGoals: padWeekGoals([]),
+    memo: '',
+    dayNotes: defaultDayNotes(),
     dayTasks,
     filledSlots: {},
   }
@@ -186,8 +200,9 @@ function normalizeWeekData(raw) {
   }
 
   return {
-    goal: raw.goal || '',
-    todos: raw.todos?.length ? raw.todos : base.todos,
+    weekGoals: padWeekGoals(raw.weekGoals),
+    memo: migrateMemo(raw),
+    dayNotes: normalizeDayNotes(raw),
     dayTasks,
     filledSlots: raw.filledSlots || {},
   }
@@ -208,19 +223,38 @@ function useWeeklyStorage(weekId) {
     [weekId, updateWeekly],
   )
 
-  const setGoal = useCallback((goal) => patchWeek({ goal }), [patchWeek])
-
-  const setSidebarTodo = useCallback(
-    (todoId, updates) => {
+  const setWeekGoal = useCallback(
+    (goalId, updates) => {
       updateWeekly((prev) => {
         const current = normalizeWeekData(prev[weekId])
         return {
           ...prev,
           [weekId]: {
             ...current,
-            todos: current.todos.map((t) =>
-              t.id === todoId ? { ...t, ...updates } : t,
+            weekGoals: current.weekGoals.map((goal) =>
+              goal.id === goalId ? { ...goal, ...updates } : goal,
             ),
+          },
+        }
+      })
+    },
+    [weekId, updateWeekly],
+  )
+
+  const setMemo = useCallback(
+    (memo) => patchWeek({ memo }),
+    [patchWeek],
+  )
+
+  const setDayNote = useCallback(
+    (dayIdx, note) => {
+      updateWeekly((prev) => {
+        const current = normalizeWeekData(prev[weekId])
+        return {
+          ...prev,
+          [weekId]: {
+            ...current,
+            dayNotes: { ...current.dayNotes, [dayIdx]: note },
           },
         }
       })
@@ -268,7 +302,7 @@ function useWeeklyStorage(weekId) {
     [weekId, updateWeekly],
   )
 
-  return { weekData, setGoal, setSidebarTodo, setDayTask, setSlotFilled }
+  return { weekData, setWeekGoal, setMemo, setDayNote, setDayTask, setSlotFilled }
 }
 
 function SectionHeader({ children }) {
@@ -330,10 +364,17 @@ function TaskRow({ task, onText, onToggle, inputRef, onEnter }) {
 
   return (
     <div
-      className="flex items-center border-b border-planner-sand/80"
+      className={[
+        'flex items-center border-b',
+        TIMETABLE_CELL_BORDER,
+      ].join(' ')}
       style={{ height: TASK_ROW_HEIGHT }}
     >
-      <div className="mx-1.5 h-full w-px self-stretch border-l border-dotted border-planner-sand" />
+      <DottedCheckbox
+        checked={task.done}
+        onChange={(done) => onToggle({ done })}
+        className="mx-2 shrink-0"
+      />
       <input
         ref={inputRef}
         type="text"
@@ -352,11 +393,6 @@ function TaskRow({ task, onText, onToggle, inputRef, onEnter }) {
         ]
           .filter(Boolean)
           .join(' ')}
-      />
-      <DottedCheckbox
-        checked={task.done}
-        onChange={(done) => onToggle({ done })}
-        className="mx-2"
       />
     </div>
   )
@@ -383,7 +419,7 @@ function TaskList({ tasks, onText, onToggle }) {
   )
 }
 
-function DayTasksPanel({ dayIdx, tasks, setDayTask, showLabel }) {
+function DayTasksPanel({ dayIdx, tasks, dayNote, setDayTask, setDayNote, showLabel }) {
   return (
     <div className="flex h-full flex-col bg-white">
       {showLabel && (
@@ -394,7 +430,14 @@ function DayTasksPanel({ dayIdx, tasks, setDayTask, showLabel }) {
           TASKS
         </p>
       )}
-      <div className="min-h-0 flex-1">
+      <textarea
+        value={dayNote}
+        onChange={(e) => setDayNote(dayIdx, e.target.value)}
+        placeholder="메모"
+        className="w-full shrink-0 resize-none border-b border-planner-sand/70 bg-white px-2 py-1.5 text-[11px] leading-relaxed text-planner-ink placeholder:text-planner-ink-muted/40 focus:outline-none"
+        style={{ height: DAY_NOTE_HEIGHT }}
+      />
+      <div className="min-h-0 flex-1 overflow-hidden">
         <TaskList
           tasks={tasks}
           onText={(taskId, text) => setDayTask(dayIdx, taskId, { text })}
@@ -421,7 +464,8 @@ function TimeCell({ dayIdx, hour, slot, filled, startPaint }) {
         startPaint(key, filled)
       }}
       className={[
-        'min-h-0 min-w-0 w-full cursor-pointer touch-none select-none border-r border-planner-sand/90 last:border-r-0',
+        'min-h-0 min-w-0 w-full cursor-pointer touch-none select-none border-r border-b last:border-r-0',
+        TIMETABLE_CELL_BORDER,
         'transition active:opacity-80',
         filled
           ? 'bg-planner-sage/65 hover:bg-planner-sage/75'
@@ -432,15 +476,10 @@ function TimeCell({ dayIdx, hour, slot, filled, startPaint }) {
   )
 }
 
-function HourSlotRow({ dayIdx, hour, filledSlots, startPaint, className = '' }) {
+function HourSlotRow({ dayIdx, hour, filledSlots, startPaint }) {
   return (
     <div
-      className={[
-        'grid w-full grid-cols-6 border-b border-planner-sand',
-        className,
-      ]
-        .filter(Boolean)
-        .join(' ')}
+      className="grid h-full w-full grid-cols-6"
       style={{ height: TIMETABLE_ROW_HEIGHT }}
     >
       {Array.from({ length: SLOTS_PER_HOUR }, (_, slot) => {
@@ -463,12 +502,16 @@ function HourSlotRow({ dayIdx, hour, filledSlots, startPaint, className = '' }) 
 
 function DayTimetableColumn({ dayIdx, filledSlots, startPaint, showHourLabels }) {
   return (
-    <div className="flex min-w-0 flex-1 flex-col touch-none select-none">
+    <div className="flex w-full flex-col touch-none select-none">
       {HOURS.map((hour) => (
-        <div key={hour} className="flex" style={{ height: TIMETABLE_ROW_HEIGHT }}>
+        <div key={hour} className="flex w-full" style={{ height: TIMETABLE_ROW_HEIGHT }}>
           {showHourLabels && (
             <div
-              className="flex w-7 shrink-0 items-center justify-center border-r border-b border-planner-sand bg-planner-warm text-[10px] font-medium text-planner-ink-muted/70"
+              className={[
+                'flex shrink-0 items-center justify-center border-r border-b bg-planner-warm text-[9px] font-medium text-planner-ink-muted/70',
+                HOUR_LABEL_WIDTH,
+                TIMETABLE_CELL_BORDER,
+              ].join(' ')}
               style={{ height: TIMETABLE_ROW_HEIGHT }}
             >
               {formatHourLabel(hour)}
@@ -505,7 +548,8 @@ function useIsDesktop() {
   return isDesktop
 }
 
-const tasksPanelHeight = TASK_HEADER_HEIGHT + TASK_LINES * TASK_ROW_HEIGHT
+const tasksPanelHeight =
+  TASK_HEADER_HEIGHT + DAY_NOTE_HEIGHT + DAY_TASK_LINES * TASK_ROW_HEIGHT
 
 function MobileDayPlanner({
   dayIdx,
@@ -513,6 +557,7 @@ function MobileDayPlanner({
   today,
   weekData,
   setDayTask,
+  setDayNote,
   startPaint,
 }) {
   const date = days[dayIdx]
@@ -522,11 +567,11 @@ function MobileDayPlanner({
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div
         className={[
-          'shrink-0 border-b border-planner-sage/30 py-1.5 text-center text-[11px] font-semibold tracking-wider',
+          'shrink-0 border-b border-planner-sage/30 py-1.5 text-center text-[16.5px] font-semibold tracking-wider',
           isToday ? 'bg-planner-today text-planner-ink' : 'bg-planner-sage text-white',
         ].join(' ')}
       >
-        {DAY_LABELS[dayIdx]} {date.getMonth() + 1}/{date.getDate()}
+        {formatDateWithWeekday(date, DAY_LABELS[dayIdx])}
       </div>
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -537,7 +582,9 @@ function MobileDayPlanner({
           <DayTasksPanel
             dayIdx={dayIdx}
             tasks={weekData.dayTasks[dayIdx]}
+            dayNote={weekData.dayNotes[dayIdx] || ''}
             setDayTask={setDayTask}
+            setDayNote={setDayNote}
             showLabel
           />
         </div>
@@ -553,7 +600,7 @@ function MobileDayPlanner({
             TIMETABLE
           </p>
           <div className="scrollbar-thin min-h-0 flex-1 overflow-auto">
-            <div className="min-w-[300px]">
+            <div className="min-w-[240px]">
               <DayTimetableColumn
                 dayIdx={dayIdx}
                 filledSlots={weekData.filledSlots}
@@ -574,12 +621,12 @@ function DesktopWeekGrid({
   today,
   weekData,
   setDayTask,
+  setDayNote,
   startPaint,
 }) {
   return (
-    <div className="min-w-[840px]">
+    <div className="min-w-[700px]">
       <div className="sticky top-0 z-20 flex border-b border-planner-sand bg-white">
-        <div className="w-7 shrink-0 border-r border-planner-sand bg-planner-warm" />
         {dayIndices.map((di) => {
           const date = days[di]
           const isToday = isSameDay(date, today)
@@ -587,39 +634,21 @@ function DesktopWeekGrid({
             <div
               key={di}
               className={[
-                'min-w-[108px] flex-1 border-r border-planner-sage/30 py-1 text-center text-[10px] font-semibold tracking-wider last:border-r-0',
+                `${DAY_COLUMN_MIN_WIDTH} flex-1 border-r border-planner-sage/30 py-1 text-center text-[15px] font-semibold tracking-wider last:border-r-0`,
                 isToday ? 'bg-planner-today text-planner-ink' : 'bg-planner-sage text-white',
               ].join(' ')}
             >
-              {DAY_LABELS[di]} {date.getMonth() + 1}/{date.getDate()}
+              {formatDateWithWeekday(date, DAY_LABELS[di])}
             </div>
           )
         })}
       </div>
 
       <div className="flex">
-        <div className="w-7 shrink-0 border-r border-planner-sand bg-planner-warm">
-          <div
-            className="flex items-center justify-center border-b border-planner-sand text-[8px] font-medium tracking-wider text-planner-ink-muted/50 [writing-mode:vertical-rl]"
-            style={{ height: tasksPanelHeight }}
-          >
-            TASKS
-          </div>
-          {HOURS.map((hour) => (
-            <div
-              key={hour}
-              className="flex items-center justify-center border-b border-planner-sand text-[10px] font-medium text-planner-ink-muted/70"
-              style={{ height: TIMETABLE_ROW_HEIGHT }}
-            >
-              {formatHourLabel(hour)}
-            </div>
-          ))}
-        </div>
-
         {dayIndices.map((di) => (
           <div
             key={di}
-            className="min-w-[108px] flex-1 border-r border-planner-sand last:border-r-0"
+            className={`${DAY_COLUMN_MIN_WIDTH} flex-1 border-r border-planner-sand last:border-r-0`}
           >
             <div
               className="border-b border-planner-sand"
@@ -628,19 +657,18 @@ function DesktopWeekGrid({
               <DayTasksPanel
                 dayIdx={di}
                 tasks={weekData.dayTasks[di]}
+                dayNote={weekData.dayNotes[di] || ''}
                 setDayTask={setDayTask}
+                setDayNote={setDayNote}
                 showLabel
               />
             </div>
-            {HOURS.map((hour) => (
-              <HourSlotRow
-                key={hour}
-                dayIdx={di}
-                hour={hour}
-                filledSlots={weekData.filledSlots}
-                startPaint={startPaint}
-              />
-            ))}
+            <DayTimetableColumn
+              dayIdx={di}
+              filledSlots={weekData.filledSlots}
+              startPaint={startPaint}
+              showHourLabels
+            />
           </div>
         ))}
       </div>
@@ -648,11 +676,48 @@ function DesktopWeekGrid({
   )
 }
 
-export default function WeeklyView({ weekMonday, onBack, today }) {
+function shiftWeekMonday(monday, weeks) {
+  const next = new Date(monday)
+  next.setDate(monday.getDate() + weeks * 7)
+  next.setHours(0, 0, 0, 0)
+  return next
+}
+
+export default function WeeklyView({
+  weekMonday,
+  onBack,
+  onWeekChange,
+  today,
+  monthGoals,
+  onUpdateMonthGoal,
+}) {
   const weekId = useMemo(() => getWeekIdFromMonday(weekMonday), [weekMonday])
   const days = useMemo(() => getWeekDays(weekMonday), [weekMonday])
-  const { weekData, setGoal, setSidebarTodo, setDayTask, setSlotFilled } =
+  const { weekData, setWeekGoal, setMemo, setDayNote, setDayTask, setSlotFilled } =
     useWeeklyStorage(weekId)
+
+  const { year: goalYear, month: goalMonth } = useMemo(
+    () => getDominantMonthAndYear(days),
+    [days],
+  )
+  const syncedMonthGoals = useMemo(
+    () => padMonthGoals(monthGoals?.[goalYear]?.[String(goalMonth)]),
+    [monthGoals, goalYear, goalMonth],
+  )
+
+  const handleMonthGoalUpdate = useCallback(
+    (goalId, updates) => {
+      onUpdateMonthGoal?.(goalYear, goalMonth, goalId, updates)
+    },
+    [onUpdateMonthGoal, goalYear, goalMonth],
+  )
+
+  const handleWeekGoalUpdate = useCallback(
+    (goalId, updates) => {
+      setWeekGoal(goalId, updates)
+    },
+    [setWeekGoal],
+  )
 
   const { startPaint } = useSlotPainter(setSlotFilled)
 
@@ -671,37 +736,67 @@ export default function WeeklyView({ weekMonday, onBack, today }) {
         <button
           type="button"
           onClick={onBack}
-          className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-planner-sage transition hover:bg-planner-sage-light sm:text-sm"
+          className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-planner-sage transition hover:bg-planner-sage-light sm:text-sm"
         >
           ← 연간 보기
         </button>
-        <h2 className="text-xs font-medium text-planner-ink sm:text-sm">
-          {formatWeekRange(days)}
-        </h2>
-        <div className="w-16" />
+        <div className="flex min-w-0 flex-1 items-center justify-center gap-2 px-2">
+          <button
+            type="button"
+            onClick={() => onWeekChange?.(shiftWeekMonday(weekMonday, -1))}
+            className="flex size-7 shrink-0 items-center justify-center rounded-full border border-planner-sand text-planner-ink-muted transition hover:border-planner-sage-muted hover:bg-planner-sage-light hover:text-planner-sage"
+            aria-label="지난 주"
+          >
+            ‹
+          </button>
+          <h2 className="truncate text-center text-xs font-medium text-planner-ink sm:text-sm">
+            {formatWeekRange(days)}
+          </h2>
+          <button
+            type="button"
+            onClick={() => onWeekChange?.(shiftWeekMonday(weekMonday, 1))}
+            className="flex size-7 shrink-0 items-center justify-center rounded-full border border-planner-sand text-planner-ink-muted transition hover:border-planner-sage-muted hover:bg-planner-sage-light hover:text-planner-sage"
+            aria-label="다음 주"
+          >
+            ›
+          </button>
+        </div>
+        <div className="w-16 shrink-0 lg:hidden" />
+        <div className="hidden w-[88px] shrink-0 lg:block" />
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <aside className="flex w-full shrink-0 flex-col border-b border-planner-sand bg-white lg:w-[140px] lg:border-b-0 lg:border-r">
+        <aside className="flex w-full shrink-0 flex-col border-b border-planner-sand bg-white lg:w-[210px] lg:border-b-0 lg:border-r">
           <div className="hidden h-8 border-b border-planner-sand lg:block" />
 
           <div className="flex flex-1 flex-col">
             <SectionHeader>GOAL</SectionHeader>
-            <textarea
-              value={weekData.goal}
-              onChange={(e) => setGoal(e.target.value)}
-              placeholder="이번 주 목표"
-              className="min-h-[72px] resize-none bg-white p-2 text-xs leading-relaxed text-planner-ink placeholder:text-planner-ink-muted/40 focus:outline-none lg:min-h-[120px] lg:flex-1"
-            />
-
-            <SectionHeader>TO DO LIST</SectionHeader>
-            <div className="max-h-[140px] overflow-auto lg:max-h-none lg:flex-1">
-              <TaskList
-                tasks={weekData.todos}
-                onText={(taskId, text) => setSidebarTodo(taskId, { text })}
-                onToggle={(taskId, updates) => setSidebarTodo(taskId, updates)}
+            <div className="bg-white p-2">
+              <p className="mb-1.5 text-[10px] text-planner-ink-muted/70">
+                {goalMonth + 1}월 월간 목표
+              </p>
+              <MonthGoalChecklist
+                goals={syncedMonthGoals}
+                placeholder="월간 목표"
+                onUpdateGoal={handleMonthGoalUpdate}
+              />
+              <p className="mb-1.5 mt-3 text-[10px] text-planner-ink-muted/70">
+                주간 목표
+              </p>
+              <MonthGoalChecklist
+                goals={weekData.weekGoals}
+                placeholder="주간 목표"
+                onUpdateGoal={handleWeekGoalUpdate}
               />
             </div>
+
+            <SectionHeader>MEMO</SectionHeader>
+            <textarea
+              value={weekData.memo}
+              onChange={(e) => setMemo(e.target.value)}
+              placeholder="메모를 자유롭게 적어 보세요"
+              className="min-h-[120px] flex-1 resize-none bg-white p-2 text-xs leading-relaxed text-planner-ink placeholder:text-planner-ink-muted/40 focus:outline-none lg:min-h-[160px]"
+            />
           </div>
         </aside>
 
@@ -716,7 +811,7 @@ export default function WeeklyView({ weekMonday, onBack, today }) {
                   type="button"
                   onClick={() => setMobileDay(i)}
                   className={[
-                    'shrink-0 rounded-md px-2.5 py-1 text-[10px] font-medium transition',
+                    'shrink-0 rounded-md px-2.5 py-1 text-[15px] font-medium transition',
                     active
                       ? 'bg-planner-sage text-white'
                       : 'bg-planner-warm text-planner-ink-muted',
@@ -725,7 +820,7 @@ export default function WeeklyView({ weekMonday, onBack, today }) {
                     .filter(Boolean)
                     .join(' ')}
                 >
-                  {DAY_LABELS[i]} {date.getMonth() + 1}/{date.getDate()}
+                  {formatDateWithWeekday(date, DAY_LABELS[i])}
                 </button>
               )
             })}
@@ -739,6 +834,7 @@ export default function WeeklyView({ weekMonday, onBack, today }) {
                 today={today}
                 weekData={weekData}
                 setDayTask={setDayTask}
+                setDayNote={setDayNote}
                 startPaint={startPaint}
               />
             ) : (
@@ -748,6 +844,7 @@ export default function WeeklyView({ weekMonday, onBack, today }) {
                 today={today}
                 weekData={weekData}
                 setDayTask={setDayTask}
+                setDayNote={setDayNote}
                 startPaint={startPaint}
               />
             )}

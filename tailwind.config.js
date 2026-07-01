@@ -19,7 +19,7 @@ export default {
           'ink-muted': '#7A746C',
           today: '#C5E8D8',
           'today-ring': '#5A9E82',
-          weekend: '#F5F0EA',
+          weekend: '#EDF5EE',
           'year-gold': '#E8D5A8',
         },
       },
