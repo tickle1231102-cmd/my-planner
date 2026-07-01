@@ -5,5 +5,6 @@ import { cloudApiDevPlugin } from './vite.cloudApi.js'
 
 // https://vite.dev/config/
 export default defineConfig({
+  envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
   plugins: [react(), tailwindcss(), cloudApiDevPlugin()],
 })
