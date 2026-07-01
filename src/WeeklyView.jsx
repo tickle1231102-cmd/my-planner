@@ -26,6 +26,48 @@ const SIDEBAR_WIDTH = 'lg:w-[252px]'
 const TODO_TASK_COUNT = Math.floor(DAY_TASK_LINES / 2)
 const MOBILE_DAY_NOTE_HEIGHT = 52
 
+const TIMETABLE_PAINT_COLORS = [
+  {
+    id: 'sage',
+    swatch: 'bg-planner-sage',
+    filled: 'bg-planner-sage/65 hover:bg-planner-sage/75',
+  },
+  {
+    id: 'mint',
+    swatch: 'bg-planner-today-ring',
+    filled: 'bg-planner-today-ring/55 hover:bg-planner-today-ring/65',
+  },
+  {
+    id: 'mist',
+    swatch: 'bg-planner-mist',
+    filled: 'bg-planner-mist/50 hover:bg-planner-mist/60',
+  },
+  {
+    id: 'sun',
+    swatch: 'bg-planner-sun',
+    filled: 'bg-planner-sun/70 hover:bg-planner-sun/80',
+  },
+  {
+    id: 'peach',
+    swatch: 'bg-planner-peach',
+    filled: 'bg-planner-peach/65 hover:bg-planner-peach/75',
+  },
+]
+
+const TIMETABLE_COLOR_BY_ID = Object.fromEntries(
+  TIMETABLE_PAINT_COLORS.map((color) => [color.id, color]),
+)
+const DEFAULT_TIMETABLE_COLOR = TIMETABLE_PAINT_COLORS[0].id
+
+function migrateFilledSlots(slots) {
+  const next = {}
+  for (const [key, value] of Object.entries(slots || {})) {
+    if (value === true) next[key] = DEFAULT_TIMETABLE_COLOR
+    else if (typeof value === 'string' && TIMETABLE_COLOR_BY_ID[value]) next[key] = value
+  }
+  return next
+}
+
 function getWeekOfMonth(date) {
   const first = new Date(date.getFullYear(), date.getMonth(), 1)
   const mondayOffset = (first.getDay() + 6) % 7
@@ -147,17 +189,17 @@ function findSlotCell(target) {
   return target.closest('[data-slot-key]')
 }
 
-function useSlotPainter(setSlotFilled) {
-  const paintRef = useRef({ active: false, fill: true })
+function useSlotPainter(setSlotFilled, { locked, paintColorId }) {
+  const paintRef = useRef({ active: false, fillValue: DEFAULT_TIMETABLE_COLOR })
   const lastKeyRef = useRef(null)
 
   const paintKey = useCallback(
-    (key, filled) => {
+    (key, value) => {
       if (!key || key === lastKeyRef.current) return
       const parsed = parseSlotKey(key)
       if (!parsed) return
       lastKeyRef.current = key
-      setSlotFilled(parsed.dayIdx, parsed.hour, parsed.slot, filled)
+      setSlotFilled(parsed.dayIdx, parsed.hour, parsed.slot, value)
     },
     [setSlotFilled],
   )
@@ -168,21 +210,22 @@ function useSlotPainter(setSlotFilled) {
   }, [])
 
   const startPaint = useCallback(
-    (key, currentlyFilled) => {
-      const fill = !currentlyFilled
-      paintRef.current = { active: true, fill }
+    (key, currentColorId) => {
+      if (locked) return
+      const value = currentColorId ? false : paintColorId
+      paintRef.current = { active: true, fillValue: value }
       lastKeyRef.current = null
-      paintKey(key, fill)
+      paintKey(key, value)
     },
-    [paintKey],
+    [locked, paintColorId, paintKey],
   )
 
   const continuePaint = useCallback(
     (key) => {
-      if (!paintRef.current.active) return
-      paintKey(key, paintRef.current.fill)
+      if (!paintRef.current.active || locked) return
+      paintKey(key, paintRef.current.fillValue)
     },
-    [paintKey],
+    [locked, paintKey],
   )
 
   useEffect(() => {
@@ -223,7 +266,7 @@ function normalizeWeekData(raw) {
     memo: migrateMemo(raw),
     dayNotes: normalizeDayNotes(raw),
     dayTasks,
-    filledSlots: raw.filledSlots || {},
+    filledSlots: migrateFilledSlots(raw.filledSlots),
   }
 }
 
@@ -303,15 +346,15 @@ function useWeeklyStorage(weekId) {
   )
 
   const setSlotFilled = useCallback(
-    (dayIdx, hour, slot, filled) => {
+    (dayIdx, hour, slot, value) => {
       const key = slotKey(dayIdx, hour, slot)
       updateWeekly((prev) => {
         const current = normalizeWeekData(prev[weekId])
-        const isFilled = !!current.filledSlots[key]
-        if (isFilled === filled) return prev
+        const currentValue = current.filledSlots[key]
+        if (currentValue === value || (!value && !currentValue)) return prev
         const next = { ...current.filledSlots }
-        if (filled) next[key] = true
-        else delete next[key]
+        if (!value) delete next[key]
+        else next[key] = value
         return {
           ...prev,
           [weekId]: { ...current, filledSlots: next },
@@ -521,35 +564,38 @@ function DayTasksPanel({
   )
 }
 
-function TimeCell({ dayIdx, hour, slot, filled, startPaint }) {
+function TimeCell({ dayIdx, hour, slot, colorId, startPaint, locked }) {
   const key = slotKey(dayIdx, hour, slot)
+  const filledClass =
+    colorId && TIMETABLE_COLOR_BY_ID[colorId]
+      ? TIMETABLE_COLOR_BY_ID[colorId].filled
+      : TIMETABLE_COLOR_BY_ID[DEFAULT_TIMETABLE_COLOR].filled
 
   return (
     <div
       role="button"
       tabIndex={-1}
-      aria-pressed={filled}
+      aria-pressed={!!colorId}
       data-slot-key={key}
       onPointerDown={(e) => {
-        if (e.button !== 0) return
+        if (locked || e.button !== 0) return
         e.preventDefault()
         e.currentTarget.setPointerCapture(e.pointerId)
-        startPaint(key, filled)
+        startPaint(key, colorId)
       }}
       className={[
-        'min-h-0 min-w-0 w-full cursor-pointer touch-none select-none border-r border-b last:border-r-0',
+        'min-h-0 min-w-0 w-full touch-none select-none border-r border-b last:border-r-0',
         TIMETABLE_CELL_BORDER,
-        'transition active:opacity-80',
-        filled
-          ? 'bg-planner-sage/65 hover:bg-planner-sage/75'
-          : 'bg-white hover:bg-planner-sage-light/35',
+        'transition',
+        locked ? 'cursor-default' : 'cursor-pointer active:opacity-80',
+        colorId ? filledClass : 'bg-white hover:bg-planner-sage-light/35',
       ].join(' ')}
       style={{ height: TIMETABLE_ROW_HEIGHT, minHeight: TIMETABLE_ROW_HEIGHT }}
     />
   )
 }
 
-function HourSlotRow({ dayIdx, hour, filledSlots, startPaint }) {
+function HourSlotRow({ dayIdx, hour, filledSlots, startPaint, locked }) {
   return (
     <div
       className="grid h-full w-full grid-cols-6"
@@ -557,15 +603,16 @@ function HourSlotRow({ dayIdx, hour, filledSlots, startPaint }) {
     >
       {Array.from({ length: SLOTS_PER_HOUR }, (_, slot) => {
         const key = slotKey(dayIdx, hour, slot)
-        const filled = !!filledSlots[key]
+        const colorId = filledSlots[key]
         return (
           <TimeCell
             key={slot}
             dayIdx={dayIdx}
             hour={hour}
             slot={slot}
-            filled={filled}
+            colorId={colorId}
             startPaint={startPaint}
+            locked={locked}
           />
         )
       })}
@@ -573,7 +620,7 @@ function HourSlotRow({ dayIdx, hour, filledSlots, startPaint }) {
   )
 }
 
-function DayTimetableColumn({ dayIdx, filledSlots, startPaint, showHourLabels }) {
+function DayTimetableColumn({ dayIdx, filledSlots, startPaint, showHourLabels, locked }) {
   return (
     <div className="flex w-full flex-col touch-none select-none">
       {HOURS.map((hour) => (
@@ -596,10 +643,81 @@ function DayTimetableColumn({ dayIdx, filledSlots, startPaint, showHourLabels })
               hour={hour}
               filledSlots={filledSlots}
               startPaint={startPaint}
+              locked={locked}
             />
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+function TimetableLockIcon({ locked }) {
+  if (locked) {
+    return (
+      <svg viewBox="0 0 16 16" className="size-3" aria-hidden>
+        <path
+          fill="currentColor"
+          d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2h.75A1.25 1.25 0 0 1 12.25 8.25v5.5A1.25 1.25 0 0 1 11 15H5a1.25 1.25 0 0 1-1.25-1.25v-5.5A1.25 1.25 0 0 1 5 7h.5Zm1.5 0h2V5a1 1 0 0 0-2 0v2Z"
+        />
+      </svg>
+    )
+  }
+
+  return (
+    <svg viewBox="0 0 16 16" className="size-3" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M5 7V5a3 3 0 0 1 6 0v1h.75A1.25 1.25 0 0 1 13 7.25v5.5A1.25 1.25 0 0 1 11.75 14H4.25A1.25 1.25 0 0 1 3 12.75v-5.5A1.25 1.25 0 0 1 4.25 7H5Zm1.5 0h3V5a1.5 1.5 0 0 0-3 0v2Z"
+      />
+    </svg>
+  )
+}
+
+function TimetableToolbar({
+  paintColorId,
+  onPaintColorChange,
+  locked,
+  onToggleLock,
+}) {
+  return (
+    <div className="flex h-[22px] shrink-0 items-center gap-1.5 border-b border-planner-sand/70 bg-planner-warm/50 px-2">
+      <span className="shrink-0 text-[8px] font-medium tracking-[0.12em] text-planner-ink-muted/70">
+        TIMETABLE
+      </span>
+      <div className="flex items-center gap-1">
+        {TIMETABLE_PAINT_COLORS.map((color) => (
+          <button
+            key={color.id}
+            type="button"
+            onClick={() => onPaintColorChange(color.id)}
+            aria-label={`타임테이블 색상: ${color.id}`}
+            aria-pressed={paintColorId === color.id}
+            className={[
+              'size-3.5 shrink-0 rounded-full border border-white/70 shadow-sm transition',
+              color.swatch,
+              paintColorId === color.id
+                ? 'ring-2 ring-planner-ink/20 ring-offset-1'
+                : 'opacity-85 hover:opacity-100',
+            ].join(' ')}
+          />
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={onToggleLock}
+        aria-label={locked ? '타임테이블 잠금 해제' : '타임테이블 잠금'}
+        aria-pressed={locked}
+        title={locked ? '잠금 해제' : '잠금'}
+        className={[
+          'ml-auto flex size-5 shrink-0 items-center justify-center rounded transition',
+          locked
+            ? 'bg-planner-sage/20 text-planner-sage'
+            : 'text-planner-ink-muted/45 hover:bg-planner-sand/70 hover:text-planner-ink-muted',
+        ].join(' ')}
+      >
+        <TimetableLockIcon locked={locked} />
+      </button>
     </div>
   )
 }
@@ -635,6 +753,10 @@ function MobileDayColumn({
   setDayTask,
   setDayNote,
   startPaint,
+  paintColorId,
+  onPaintColorChange,
+  locked,
+  onToggleLock,
 }) {
   const date = days[dayIdx]
   const isToday = isSameDay(date, today)
@@ -665,17 +787,19 @@ function MobileDayColumn({
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
-          <p
-            className="flex h-[22px] shrink-0 items-center border-b border-planner-sand/70 bg-planner-warm/50 px-2 text-[8px] font-medium tracking-[0.12em] text-planner-ink-muted/70"
-          >
-            TIMETABLE
-          </p>
+          <TimetableToolbar
+            paintColorId={paintColorId}
+            onPaintColorChange={onPaintColorChange}
+            locked={locked}
+            onToggleLock={onToggleLock}
+          />
           <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto">
             <DayTimetableColumn
               dayIdx={dayIdx}
               filledSlots={weekData.filledSlots}
               startPaint={startPaint}
               showHourLabels
+              locked={locked}
             />
           </div>
         </div>
@@ -691,6 +815,10 @@ function MobileWeekScroller({
   setDayTask,
   setDayNote,
   startPaint,
+  paintColorId,
+  onPaintColorChange,
+  locked,
+  onToggleLock,
 }) {
   const scrollRef = useRef(null)
 
@@ -717,6 +845,10 @@ function MobileWeekScroller({
           setDayTask={setDayTask}
           setDayNote={setDayNote}
           startPaint={startPaint}
+          paintColorId={paintColorId}
+          onPaintColorChange={onPaintColorChange}
+          locked={locked}
+          onToggleLock={onToggleLock}
         />
       ))}
     </div>
@@ -813,6 +945,10 @@ function DesktopWeekGrid({
   setDayTask,
   setDayNote,
   startPaint,
+  paintColorId,
+  onPaintColorChange,
+  locked,
+  onToggleLock,
 }) {
   return (
     <div className="min-w-[700px]">
@@ -832,6 +968,24 @@ function DesktopWeekGrid({
             </div>
           )
         })}
+      </div>
+
+      <div className="sticky z-10 flex border-b border-planner-sand/70 bg-planner-warm/50">
+        <div
+          className={[
+            'shrink-0 border-r bg-planner-warm/50',
+            HOUR_LABEL_WIDTH,
+            TIMETABLE_CELL_BORDER,
+          ].join(' ')}
+        />
+        <div className="min-w-0 flex-1">
+          <TimetableToolbar
+            paintColorId={paintColorId}
+            onPaintColorChange={onPaintColorChange}
+            locked={locked}
+            onToggleLock={onToggleLock}
+          />
+        </div>
       </div>
 
       <div className="flex">
@@ -858,6 +1012,7 @@ function DesktopWeekGrid({
               filledSlots={weekData.filledSlots}
               startPaint={startPaint}
               showHourLabels
+              locked={locked}
             />
           </div>
         ))}
@@ -912,7 +1067,13 @@ export default function WeeklyView({
     [setWeekGoal],
   )
 
-  const { startPaint } = useSlotPainter(setSlotFilled)
+  const [paintColorId, setPaintColorId] = useState(DEFAULT_TIMETABLE_COLOR)
+  const [timetableLocked, setTimetableLocked] = useState(false)
+
+  const { startPaint } = useSlotPainter(setSlotFilled, {
+    locked: timetableLocked,
+    paintColorId,
+  })
 
   const isDesktop = useIsDesktop()
 
@@ -990,6 +1151,10 @@ export default function WeeklyView({
                 setDayTask={setDayTask}
                 setDayNote={setDayNote}
                 startPaint={startPaint}
+                paintColorId={paintColorId}
+                onPaintColorChange={setPaintColorId}
+                locked={timetableLocked}
+                onToggleLock={() => setTimetableLocked((prev) => !prev)}
               />
             ) : (
               <MobileWeekScroller
@@ -999,6 +1164,10 @@ export default function WeeklyView({
                 setDayTask={setDayTask}
                 setDayNote={setDayNote}
                 startPaint={startPaint}
+                paintColorId={paintColorId}
+                onPaintColorChange={setPaintColorId}
+                locked={timetableLocked}
+                onToggleLock={() => setTimetableLocked((prev) => !prev)}
               />
             )}
           </div>

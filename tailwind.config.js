@@ -21,6 +21,8 @@ export default {
           'today-ring': '#5A9E82',
           weekend: '#EDF5EE',
           'year-gold': '#E8D5A8',
+          sun: '#EDD060',
+          peach: '#F5A882',
         },
       },
       fontFamily: {
