@@ -5,6 +5,19 @@ import { userKeyToAuthEmail } from '../src/lib/authEmail.js'
 export { userKeyToAuthEmail } from '../src/lib/authEmail.js'
 export const MIN_PASSWORD_LENGTH = 8
 
+function formatServerError(error) {
+  const message =
+    error?.message ||
+    error?.msg ||
+    (typeof error === 'string' ? error : 'request failed')
+
+  if (message.includes('auth_user_id does not exist')) {
+    return 'DB 업데이트가 필요합니다. Supabase SQL Editor에서 supabase/migrations/add_password_auth.sql 을 실행해 주세요.'
+  }
+
+  return message
+}
+
 function isValidPassword(password) {
   return typeof password === 'string' && password.length >= MIN_PASSWORD_LENGTH
 }
@@ -160,10 +173,7 @@ export async function handleAuthStatus(body = {}) {
     const status = await getUserKeyAuthStatus(admin, userKey)
     return { status: 200, body: { status } }
   } catch (error) {
-    const message =
-      error?.message ||
-      error?.msg ||
-      (typeof error === 'string' ? error : 'status check failed')
+    const message = formatServerError(error)
     return { status: 500, body: { error: message } }
   }
 }
@@ -234,10 +244,7 @@ export async function handleAuthRegister(body = {}) {
       return { status: 409, body: { error: 'already claimed' } }
     }
 
-    const message =
-      error?.message ||
-      error?.msg ||
-      (typeof error === 'string' ? error : 'register failed')
+    const message = formatServerError(error)
     return { status: 500, body: { error: message } }
   }
 }
