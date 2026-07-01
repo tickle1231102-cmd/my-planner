@@ -1,10 +1,19 @@
 import { getAdminClient } from './supabaseAdmin.js'
+import {
+  insertAppDataRow,
+  isMissingOptionalColumnError,
+  optionalColumnMigrationHint,
+  selectAppDataRow,
+  upsertAppDataRow,
+} from '../src/lib/appDataDb.js'
 
 const USER_KEY_RE = /^[a-zA-Z0-9가-힣_-]{3,32}$/
 
 const DEFAULT_ANNUAL = { columns: [], weekData: {} }
 const DEFAULT_WEEKLY = {}
 const DEFAULT_HABIT = {}
+const DEFAULT_MANDALA = { cells: [], keyword: '', resolution: '' }
+const DEFAULT_MONTHLY = {}
 
 export function normalizeUserKey(raw) {
   return String(raw ?? '')
@@ -34,14 +43,14 @@ async function ensureProfile(userKey, nickname) {
 
   if (profileError) throw profileError
 
-  const { error: dataError } = await supabase.from('app_data').insert({
+  await insertAppDataRow(supabase, {
     user_key: userKey,
     annual_data: DEFAULT_ANNUAL,
     weekly_data: DEFAULT_WEEKLY,
     habit_data: DEFAULT_HABIT,
+    mandala_data: DEFAULT_MANDALA,
+    monthly_data: DEFAULT_MONTHLY,
   })
-
-  if (dataError) throw dataError
 }
 
 export async function loadAppData(userKey) {
@@ -52,17 +61,15 @@ export async function loadAppData(userKey) {
   await ensureProfile(userKey)
   const supabase = getAdminClient()
 
-  const { data, error } = await supabase
-    .from('app_data')
-    .select('annual_data, weekly_data, habit_data, updated_at')
-    .eq('user_key', userKey)
-    .single()
-
-  if (error) {
-    return { status: 500, body: { error: error.message } }
+  try {
+    const data = await selectAppDataRow(supabase, userKey)
+    return { status: 200, body: { data } }
+  } catch (error) {
+    const message = isMissingOptionalColumnError(error)
+      ? optionalColumnMigrationHint(error)
+      : error?.message || 'request failed'
+    return { status: 500, body: { error: message } }
   }
-
-  return { status: 200, body: { data } }
 }
 
 export async function saveAppData(userKey, payload = {}) {
@@ -76,19 +83,20 @@ export async function saveAppData(userKey, payload = {}) {
   if (payload.annual_data !== undefined) patch.annual_data = payload.annual_data
   if (payload.weekly_data !== undefined) patch.weekly_data = payload.weekly_data
   if (payload.habit_data !== undefined) patch.habit_data = payload.habit_data
+  if (payload.mandala_data !== undefined) patch.mandala_data = payload.mandala_data
+  if (payload.monthly_data !== undefined) patch.monthly_data = payload.monthly_data
 
   const supabase = getAdminClient()
-  const { data, error } = await supabase
-    .from('app_data')
-    .upsert(patch)
-    .select('annual_data, weekly_data, habit_data, updated_at')
-    .single()
 
-  if (error) {
-    return { status: 500, body: { error: error.message } }
+  try {
+    const data = await upsertAppDataRow(supabase, patch)
+    return { status: 200, body: { data } }
+  } catch (error) {
+    const message = isMissingOptionalColumnError(error)
+      ? optionalColumnMigrationHint(error)
+      : error?.message || 'request failed'
+    return { status: 500, body: { error: message } }
   }
-
-  return { status: 200, body: { data } }
 }
 
 export async function handleDataRequest(method, url, body) {
@@ -108,6 +116,8 @@ export async function handleDataRequest(method, url, body) {
       annual_data: body?.annual_data,
       weekly_data: body?.weekly_data,
       habit_data: body?.habit_data,
+      mandala_data: body?.mandala_data,
+      monthly_data: body?.monthly_data,
     })
   }
 

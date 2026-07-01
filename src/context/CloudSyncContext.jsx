@@ -21,6 +21,18 @@ import {
   saveHabitData,
 } from '../lib/habitStorage.js'
 import {
+  hasLocalMandalaData,
+  isMandalaDataEmpty,
+  loadMandalaData,
+  saveMandalaData,
+} from '../lib/mandalaStorage.js'
+import {
+  hasLocalMonthlyData,
+  isMonthlyDataEmpty,
+  loadMonthlyData,
+  saveMonthlyData,
+} from '../lib/monthlyStorage.js'
+import {
   DEFAULT_COLUMNS,
   hasLocalData,
   isCloudEmpty,
@@ -67,6 +79,8 @@ export function CloudSyncProvider({ children }) {
   )
   const [weeklyData, setWeeklyData] = useState(() => loadWeeklyFromLocal())
   const [habitData, setHabitData] = useState(() => loadHabitData())
+  const [mandalaData, setMandalaData] = useState(() => loadMandalaData())
+  const [monthlyData, setMonthlyData] = useState(() => loadMonthlyData())
 
   const saveTimerRef = useRef(null)
   const pendingSaveRef = useRef({})
@@ -78,6 +92,8 @@ export function CloudSyncProvider({ children }) {
     setAnnualData(withDefaultAnnual(loadAnnualFromLocal()))
     setWeeklyData(loadWeeklyFromLocal())
     setHabitData(loadHabitData())
+    setMandalaData(loadMandalaData())
+    setMonthlyData(loadMonthlyData())
     setReady(true)
     setError('')
   }, [])
@@ -92,15 +108,27 @@ export function CloudSyncProvider({ children }) {
       }
       const weekly_data = loadWeeklyFromLocal()
       const habit_data = loadHabitData()
+      const mandala_data = loadMandalaData()
+      const monthly_data = loadMonthlyData()
       cloud = await persistAppData({
         nickname: name || undefined,
         annual_data,
         weekly_data,
         habit_data,
+        mandala_data,
+        monthly_data,
       })
     } else if (isHabitDataEmpty(cloud.habit_data) && hasLocalHabitData()) {
       cloud = await persistAppData({
         habit_data: loadHabitData(),
+      })
+    } else if (isMandalaDataEmpty(cloud.mandala_data) && hasLocalMandalaData()) {
+      cloud = await persistAppData({
+        mandala_data: loadMandalaData(),
+      })
+    } else if (isMonthlyDataEmpty(cloud.monthly_data) && hasLocalMonthlyData()) {
+      cloud = await persistAppData({
+        monthly_data: loadMonthlyData(),
       })
     } else if (name) {
       cloud = await persistAppData({ nickname: name })
@@ -114,9 +142,13 @@ export function CloudSyncProvider({ children }) {
     setAnnualData(withDefaultAnnual(cloud.annual_data))
     setWeeklyData(cloud.weekly_data || {})
     setHabitData(cloud.habit_data || {})
+    setMandalaData(cloud.mandala_data || loadMandalaData())
+    setMonthlyData(cloud.monthly_data || loadMonthlyData())
     saveAnnualToLocal(cloud.annual_data)
     saveWeeklyToLocal(cloud.weekly_data || {})
     saveHabitData(cloud.habit_data || {})
+    saveMandalaData(cloud.mandala_data || loadMandalaData())
+    saveMonthlyData(cloud.monthly_data || loadMonthlyData())
     setError('')
   }, [])
 
@@ -143,6 +175,14 @@ export function CloudSyncProvider({ children }) {
         setHabitData(data.habit_data)
         saveHabitData(data.habit_data)
       }
+      if (data?.mandala_data) {
+        setMandalaData(data.mandala_data)
+        saveMandalaData(data.mandala_data)
+      }
+      if (data?.monthly_data) {
+        setMonthlyData(data.monthly_data)
+        saveMonthlyData(data.monthly_data)
+      }
       setError('')
     } catch (err) {
       setError(err instanceof Error ? err.message : '동기화 실패')
@@ -160,6 +200,8 @@ export function CloudSyncProvider({ children }) {
       if (patch.annual_data) saveAnnualToLocal(patch.annual_data)
       if (patch.weekly_data) saveWeeklyToLocal(patch.weekly_data)
       if (patch.habit_data) saveHabitData(patch.habit_data)
+      if (patch.mandala_data) saveMandalaData(patch.mandala_data)
+      if (patch.monthly_data) saveMonthlyData(patch.monthly_data)
 
       if (!cloudEnabled || localOnly) return
 
@@ -239,6 +281,8 @@ export function CloudSyncProvider({ children }) {
     setAnnualData(withDefaultAnnual(loadAnnualFromLocal()))
     setWeeklyData(loadWeeklyFromLocal())
     setHabitData(loadHabitData())
+    setMandalaData(loadMandalaData())
+    setMonthlyData(loadMonthlyData())
   }, [cloudEnabled, localOnly])
 
   useEffect(() => {
@@ -324,6 +368,28 @@ export function CloudSyncProvider({ children }) {
     [scheduleSave],
   )
 
+  const updateMandala = useCallback(
+    (updater) => {
+      setMandalaData((prev) => {
+        const next = typeof updater === 'function' ? updater(prev) : updater
+        scheduleSave({ mandala_data: next })
+        return next
+      })
+    },
+    [scheduleSave],
+  )
+
+  const updateMonthly = useCallback(
+    (updater) => {
+      setMonthlyData((prev) => {
+        const next = typeof updater === 'function' ? updater(prev) : updater
+        scheduleSave({ monthly_data: next })
+        return next
+      })
+    },
+    [scheduleSave],
+  )
+
   const value = useMemo(
     () => ({
       userKey,
@@ -337,6 +403,8 @@ export function CloudSyncProvider({ children }) {
       annualData,
       weeklyData,
       habitData,
+      mandalaData,
+      monthlyData,
       signIn,
       register,
       logout,
@@ -344,6 +412,8 @@ export function CloudSyncProvider({ children }) {
       updateAnnual,
       updateWeekly,
       updateHabitData,
+      updateMandala,
+      updateMonthly,
     }),
     [
       userKey,
@@ -357,6 +427,8 @@ export function CloudSyncProvider({ children }) {
       annualData,
       weeklyData,
       habitData,
+      mandalaData,
+      monthlyData,
       signIn,
       register,
       logout,
@@ -364,6 +436,8 @@ export function CloudSyncProvider({ children }) {
       updateAnnual,
       updateWeekly,
       updateHabitData,
+      updateMandala,
+      updateMonthly,
     ],
   )
 

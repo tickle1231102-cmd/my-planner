@@ -1,4 +1,4 @@
-const VALID_VIEWS = new Set(['annual', 'yearOverview', 'weekly', 'habit', 'mandala'])
+const VALID_VIEWS = new Set(['annual', 'yearOverview', 'weekly', 'habit', 'mandala', 'monthly'])
 
 export function formatWeekMonday(date) {
   const year = date.getFullYear()
@@ -18,6 +18,12 @@ export function parseWeekMonday(value) {
   return date
 }
 
+export function parseMonthParam(value) {
+  const month = Number(value)
+  if (!Number.isFinite(month) || month < 1 || month > 12) return null
+  return month - 1
+}
+
 export function parseAppRoute(search = window.location.search) {
   const params = new URLSearchParams(search)
   const rawView = params.get('view')
@@ -31,15 +37,21 @@ export function parseAppRoute(search = window.location.search) {
     selectedWeekMonday = parseWeekMonday(params.get('week'))
   }
 
+  let selectedMonth = null
+  if (view === 'monthly') {
+    selectedMonth = parseMonthParam(params.get('month'))
+  }
+
   return {
     view,
     year: Number.isFinite(year) ? year : null,
     tab,
     selectedWeekMonday,
+    selectedMonth,
   }
 }
 
-export function buildAppRoute({ view, year, selectedWeekMonday, mobileTab }) {
+export function buildAppRoute({ view, year, selectedWeekMonday, selectedMonth, mobileTab }) {
   const params = new URLSearchParams()
 
   if (view && view !== 'annual') {
@@ -52,6 +64,10 @@ export function buildAppRoute({ view, year, selectedWeekMonday, mobileTab }) {
 
   if (view === 'weekly' && selectedWeekMonday) {
     params.set('week', formatWeekMonday(selectedWeekMonday))
+  }
+
+  if (view === 'monthly' && selectedMonth !== null && selectedMonth !== undefined) {
+    params.set('month', String(selectedMonth + 1))
   }
 
   if (view === 'annual' && mobileTab === 'notes') {

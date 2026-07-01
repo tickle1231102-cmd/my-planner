@@ -14,6 +14,8 @@ create table if not exists public.app_data (
   annual_data jsonb not null default '{"columns":[],"weekData":{}}'::jsonb,
   weekly_data jsonb not null default '{}'::jsonb,
   habit_data jsonb not null default '{}'::jsonb,
+  mandala_data jsonb not null default '{"cells":[],"keyword":"","resolution":""}'::jsonb,
+  monthly_data jsonb not null default '{}'::jsonb,
   updated_at timestamptz not null default now()
 );
 
@@ -22,6 +24,12 @@ alter table public.profiles
 
 alter table public.app_data
   add column if not exists habit_data jsonb not null default '{}'::jsonb;
+
+alter table public.app_data
+  add column if not exists mandala_data jsonb not null default '{"cells":[],"keyword":"","resolution":""}'::jsonb;
+
+alter table public.app_data
+  add column if not exists monthly_data jsonb not null default '{}'::jsonb;
 
 create index if not exists profiles_auth_user_id_idx on public.profiles (auth_user_id);
 

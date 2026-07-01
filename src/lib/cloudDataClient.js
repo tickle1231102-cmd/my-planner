@@ -1,11 +1,20 @@
 import { getAuthenticatedProfile } from './authAccount.js'
 import { getClient } from './supabaseBrowser.js'
 import { isValidUserKey, normalizeUserKey } from './userIdentity.js'
+import {
+  isMissingOptionalColumnError,
+  optionalColumnMigrationHint,
+  selectAppDataRow,
+  upsertAppDataRow,
+} from './appDataDb.js'
 
 function toUserMessage(error) {
   const code = error?.code || ''
   const message = error?.message || '연결에 실패했습니다'
 
+  if (isMissingOptionalColumnError(error)) {
+    return optionalColumnMigrationHint(error) || message
+  }
   if (code === 'PGRST205' || message.includes('profiles')) {
     return 'DB 테이블이 없습니다. Supabase SQL Editor에서 supabase/schema.sql 을 실행해 주세요.'
   }
@@ -42,14 +51,11 @@ export async function loadAppData() {
   const profile = await requireProfile()
   const supabase = getClient()
 
-  const { data, error } = await supabase
-    .from('app_data')
-    .select('annual_data, weekly_data, habit_data, updated_at')
-    .eq('user_key', profile.user_key)
-    .single()
-
-  if (error) throw wrapError(error)
-  return data
+  try {
+    return await selectAppDataRow(supabase, profile.user_key)
+  } catch (error) {
+    throw wrapError(error)
+  }
 }
 
 export async function saveAppData(payload = {}) {
@@ -69,13 +75,12 @@ export async function saveAppData(payload = {}) {
   if (payload.annual_data !== undefined) patch.annual_data = payload.annual_data
   if (payload.weekly_data !== undefined) patch.weekly_data = payload.weekly_data
   if (payload.habit_data !== undefined) patch.habit_data = payload.habit_data
+  if (payload.mandala_data !== undefined) patch.mandala_data = payload.mandala_data
+  if (payload.monthly_data !== undefined) patch.monthly_data = payload.monthly_data
 
-  const { data, error } = await supabase
-    .from('app_data')
-    .upsert(patch)
-    .select('annual_data, weekly_data, habit_data, updated_at')
-    .single()
-
-  if (error) throw wrapError(error)
-  return data
+  try {
+    return await upsertAppDataRow(supabase, patch)
+  } catch (error) {
+    throw wrapError(error)
+  }
 }

@@ -3,6 +3,7 @@ import { MenuIcon } from './MenuIcon.jsx'
 
 const NAV_ITEMS = [
   { id: 'yearly', label: 'Yearly' },
+  { id: 'monthly', label: 'Monthly' },
   { id: 'weekly', label: 'Weekly' },
   { id: 'mandala', label: '만다라트' },
   { id: 'habit', label: 'Habit Tracker' },

@@ -7,11 +7,14 @@ import {
   useState,
 } from 'react'
 import WeeklyView, { getMondayOfWeek } from './WeeklyView.jsx'
+import MonthlyView from './MonthlyView.jsx'
 import YearOverviewCalendar from './YearOverviewCalendar.jsx'
 import HabitTracker from './HabitTracker.jsx'
+import MandalartView from './MandalartView.jsx'
 import UserKeyGate from './components/UserKeyGate.jsx'
 import SupabaseSetup from './components/SupabaseSetup.jsx'
 import { CalendarIcon } from './components/CalendarIcon.jsx'
+import { PlannerQuickNav } from './components/PlannerQuickNav.jsx'
 import { AppNavMenu } from './components/AppNavMenu.jsx'
 import { useCloudSync } from './context/CloudSyncContext.jsx'
 import { DEFAULT_COLUMNS } from './lib/plannerStorage.js'
@@ -44,15 +47,6 @@ const DATE_COLOR_CELL = Object.fromEntries(
 )
 const SATURDAY_DIVIDER = 'border-l-2 border-planner-sage/80'
 const MEMO_CALENDAR_DIVIDER = 'border-l-[3px] border-l-planner-ink/35'
-
-function PlaceholderPage({ title }) {
-  return (
-    <div className="flex min-h-[50vh] flex-col items-center justify-center rounded-2xl border border-planner-sand bg-white p-8 text-center shadow-soft">
-      <h2 className="text-lg font-medium text-planner-ink">{title}</h2>
-      <p className="mt-2 text-sm text-planner-ink-muted">준비 중입니다.</p>
-    </div>
-  )
-}
 
 function pad(n) {
   return String(n).padStart(2, '0')
@@ -903,13 +897,24 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
       const weekYear = weekMonday.getFullYear()
       if (AVAILABLE_YEARS.includes(weekYear)) return weekYear
     }
+    if (routeInit.view === 'monthly' && routeInit.year && AVAILABLE_YEARS.includes(routeInit.year)) {
+      return routeInit.year
+    }
     if (routeInit.year && AVAILABLE_YEARS.includes(routeInit.year)) {
       return routeInit.year
     }
     return defaultYear
   }, [defaultYear, routeInit, today])
 
+  const initialMonth = useMemo(() => {
+    if (routeInit.view === 'monthly' && routeInit.selectedMonth !== null) {
+      return routeInit.selectedMonth
+    }
+    return today.getMonth()
+  }, [routeInit, today])
+
   const [year, setYear] = useState(initialYear)
+  const [selectedMonth, setSelectedMonth] = useState(initialMonth)
 
   const weeks = useMemo(() => generateWeeks(year), [year])
   const monthSpans = useMemo(() => buildMonthSpans(weeks), [weeks])
@@ -933,8 +938,8 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
   const [colorMenu, setColorMenu] = useState(null)
 
   useEffect(() => {
-    syncAppRoute({ view, year, selectedWeekMonday, mobileTab })
-  }, [view, year, selectedWeekMonday, mobileTab])
+    syncAppRoute({ view, year, selectedWeekMonday, selectedMonth, mobileTab })
+  }, [view, year, selectedWeekMonday, selectedMonth, mobileTab])
 
   const openColorMenu = useCallback((date, event) => {
     if (date.getFullYear() !== year) return
@@ -973,6 +978,36 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
     setView((current) => (current === 'yearOverview' ? 'annual' : 'yearOverview'))
   }, [])
 
+  const goToYearPlanner = useCallback(() => {
+    setColorMenu(null)
+    setSelectedWeekMonday(null)
+    setView('annual')
+  }, [])
+
+  const goToYearOverviewPage = useCallback(() => {
+    setColorMenu(null)
+    setSelectedWeekMonday(null)
+    setView('yearOverview')
+  }, [])
+
+  const openYearOverview = useCallback(() => {
+    setColorMenu(null)
+    if (selectedWeekMonday) {
+      const weekYear = selectedWeekMonday.getFullYear()
+      if (AVAILABLE_YEARS.includes(weekYear) && weekYear !== year) {
+        setYear(weekYear)
+      }
+    }
+    setSelectedWeekMonday(null)
+    setView('yearOverview')
+  }, [selectedWeekMonday, year])
+
+  const openYearOverviewFromMonthly = useCallback(() => {
+    setColorMenu(null)
+    setSelectedWeekMonday(null)
+    setView('yearOverview')
+  }, [])
+
   const navigateToAppView = useCallback((target) => {
     setColorMenu(null)
     if (target === 'yearly') {
@@ -993,6 +1028,16 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
       setView('weekly')
       return
     }
+    if (target === 'monthly') {
+      setSelectedWeekMonday(null)
+      const monthYear = AVAILABLE_YEARS.includes(year) ? year : today.getFullYear()
+      if (AVAILABLE_YEARS.includes(monthYear)) {
+        setYear(monthYear)
+      }
+      setSelectedMonth(today.getMonth())
+      setView('monthly')
+      return
+    }
     setView(target)
   }, [today, year, view, selectedWeekMonday])
 
@@ -1000,6 +1045,13 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
     hasScrolledRef.current = false
     setYear(nextYear)
   }, [])
+
+  const changeMonth = useCallback((nextYear, nextMonth) => {
+    if (AVAILABLE_YEARS.includes(nextYear) && nextYear !== year) {
+      setYear(nextYear)
+    }
+    setSelectedMonth(nextMonth)
+  }, [year])
 
   const goToToday = useCallback(() => {
     if (view === 'weekly') {
@@ -1011,6 +1063,9 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
     }
     if (view === 'mandala' || view === 'habit') {
       setView('annual')
+    }
+    if (view === 'monthly') {
+      setSelectedMonth(today.getMonth())
     }
 
     const todayYear = today.getFullYear()
@@ -1054,19 +1109,29 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
   const activeNavItem =
     view === 'weekly'
       ? 'weekly'
-      : view === 'mandala'
-        ? 'mandala'
-        : view === 'habit'
-          ? 'habit'
-          : 'yearly'
+      : view === 'monthly'
+        ? 'monthly'
+        : view === 'mandala'
+          ? 'mandala'
+          : view === 'habit'
+            ? 'habit'
+            : 'yearly'
   const headerTitle =
     view === 'mandala' ? '만다라트' : view === 'habit' ? 'Habit Tracker' : '연간 플래너'
-  const headerSubtitle =
-    view === 'mandala' || view === 'habit'
-      ? '한 달 습관을 주차별로 추적하세요'
+  const quickNavActiveView =
+    view === 'annual'
+      ? 'yearly'
       : view === 'yearOverview'
-        ? '12개월 연간 캘린더 · 날짜를 누르면 주간 플래너로 이동합니다'
-        : '날짜를 눌러 주간 플래너로 이동하세요'
+        ? 'yearOverview'
+        : null
+  const headerSubtitle =
+    view === 'mandala'
+      ? '핵심 목표와 실천 계획을 만다라트로 정리하세요'
+      : view === 'habit'
+        ? '한 달 습관을 주차별로 추적하세요'
+        : view === 'yearOverview'
+          ? '12개월 연간 캘린더 · 날짜를 누르면 주간 플래너로 이동합니다'
+          : '날짜를 눌러 주간 플래너로 이동하세요'
 
   useEffect(() => {
     if (view !== 'annual' || year === today.getFullYear()) return
@@ -1084,6 +1149,33 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
           onUpdateMonthGoal={updateMonthGoal}
           activeNavItem={activeNavItem}
           onNavigate={navigateToAppView}
+          onOpenYearOverview={openYearOverview}
+          onQuickNavYearPlanner={goToYearPlanner}
+          onQuickNavMonthly={() => navigateToAppView('monthly')}
+          onQuickNavWeekly={() => navigateToAppView('weekly')}
+        />
+      </div>
+    )
+  }
+
+  if (view === 'monthly') {
+    return (
+      <div className="flex h-svh flex-col">
+        <MonthlyView
+          year={year}
+          month={selectedMonth}
+          today={today}
+          monthGoals={monthGoals}
+          onUpdateMonthGoal={updateMonthGoal}
+          onMonthChange={changeMonth}
+          onYearChange={setYear}
+          onNavigate={navigateToAppView}
+          onOpenWeek={openWeek}
+          onOpenYearOverview={openYearOverviewFromMonthly}
+          onQuickNavYearPlanner={goToYearPlanner}
+          onQuickNavMonthly={() => navigateToAppView('monthly')}
+          onQuickNavWeekly={() => navigateToAppView('weekly')}
+          activeNavItem={activeNavItem}
         />
       </div>
     )
@@ -1129,6 +1221,14 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
                   <CalendarIcon className="size-5" />
                 </button>
               )}
+              <PlannerQuickNav
+                activeView={quickNavActiveView}
+                showCalendar={!isPlannerView}
+                onYearOverview={goToYearOverviewPage}
+                onYearPlanner={goToYearPlanner}
+                onMonthly={() => navigateToAppView('monthly')}
+                onWeekly={() => navigateToAppView('weekly')}
+              />
             </div>
             <p className="text-xs text-planner-ink-muted sm:text-sm">{headerSubtitle}</p>
             <p className="mt-0.5 text-[11px] text-planner-sage">
@@ -1186,7 +1286,7 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
               }
             />
           ) : view === 'mandala' ? (
-            <PlaceholderPage title="만다라트" />
+            <MandalartView />
           ) : view === 'habit' ? (
             <HabitTracker today={today} />
           ) : (

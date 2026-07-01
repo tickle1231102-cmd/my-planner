@@ -5,6 +5,8 @@ import { getDominantMonthAndYear } from './lib/monthGoals.js'
 import { padMonthGoals, padWeekGoals } from './lib/goalLists.js'
 import MonthGoalChecklist from './components/MonthGoalChecklist.jsx'
 import { AppNavMenu } from './components/AppNavMenu.jsx'
+import { CalendarIcon } from './components/CalendarIcon.jsx'
+import { PlannerQuickNav } from './components/PlannerQuickNav.jsx'
 import WeeklyHabitStrip, { MOBILE_RAIL_WIDTH_CLASS } from './components/WeeklyHabitStrip.jsx'
 
 const WEEKLY_STORAGE_KEY = 'weekly-planner-v2'
@@ -1046,6 +1048,10 @@ export default function WeeklyView({
   onUpdateMonthGoal,
   activeNavItem,
   onNavigate,
+  onOpenYearOverview,
+  onQuickNavYearPlanner,
+  onQuickNavMonthly,
+  onQuickNavWeekly,
 }) {
   const weekId = useMemo(() => getWeekIdFromMonday(weekMonday), [weekMonday])
   const days = useMemo(() => getWeekDays(weekMonday), [weekMonday])
@@ -1090,7 +1096,28 @@ export default function WeeklyView({
   return (
     <div className="flex h-full flex-col bg-planner-cream">
       <div className="flex shrink-0 items-center justify-between border-b border-planner-sand bg-white px-3 py-2 sm:px-4">
-        <AppNavMenu activeItem={activeNavItem} onNavigate={onNavigate} />
+        <div className="flex min-w-0 shrink-0 items-center gap-2">
+          <AppNavMenu activeItem={activeNavItem} onNavigate={onNavigate} />
+          <h1 className="text-lg font-medium tracking-tight text-planner-ink sm:text-xl">
+            Weekly
+          </h1>
+          <button
+            type="button"
+            onClick={onOpenYearOverview}
+            aria-label="연간 캘린더 보기"
+            className="rounded-lg p-1.5 text-planner-sage transition hover:bg-planner-sage-light"
+          >
+            <CalendarIcon className="size-5" />
+          </button>
+          <PlannerQuickNav
+            activeView="weekly"
+            showCalendar={false}
+            onYearOverview={onOpenYearOverview}
+            onYearPlanner={onQuickNavYearPlanner}
+            onMonthly={onQuickNavMonthly}
+            onWeekly={onQuickNavWeekly}
+          />
+        </div>
         <div className="flex min-w-0 flex-1 items-center justify-center gap-2 px-2">
           <button
             type="button"
@@ -1112,8 +1139,8 @@ export default function WeeklyView({
             ›
           </button>
         </div>
-        <div className="w-16 shrink-0 lg:hidden" />
-        <div className="hidden w-[88px] shrink-0 lg:block" />
+        <div className="w-8 shrink-0 lg:hidden" />
+        <div className="hidden w-[120px] shrink-0 lg:block" />
       </div>
 
       <div className="flex min-h-0 flex-1 overflow-hidden lg:flex-row">
