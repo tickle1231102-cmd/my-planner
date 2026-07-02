@@ -1104,7 +1104,7 @@ export default function WeeklyView({
           <button
             type="button"
             onClick={onOpenYearOverview}
-            aria-label="연간 캘린더 보기"
+            aria-label="Calendar 보기"
             className="rounded-lg p-1.5 text-planner-sage transition hover:bg-planner-sage-light"
           >
             <CalendarIcon className="size-5" />

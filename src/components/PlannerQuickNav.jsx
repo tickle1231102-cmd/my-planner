@@ -33,7 +33,7 @@ export function PlannerQuickNav({
         <button
           type="button"
           onClick={onYearOverview}
-          aria-label="연간 캘린더 보기"
+          aria-label="Calendar 보기"
           aria-current={activeView === 'yearOverview' ? 'page' : undefined}
           className={[
             'flex size-7 shrink-0 items-center justify-center rounded-full border transition',
@@ -49,7 +49,7 @@ export function PlannerQuickNav({
         label="Y"
         active={activeView === 'yearly'}
         onClick={onYearPlanner}
-        ariaLabel="연간 플래너"
+        ariaLabel="Yearly"
       />
       <NavCircle
         label="M"

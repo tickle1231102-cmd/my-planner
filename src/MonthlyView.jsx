@@ -42,7 +42,7 @@ function MonthIndexTabs({
         type="button"
         onClick={onSelectYear}
         className="border-b border-white/10 px-1 py-2 text-[9px] font-semibold tracking-wide text-planner-cream transition hover:bg-planner-sage"
-        title={`${year}년 연간 플래너`}
+        title={`${year} Yearly`}
       >
         {year}
       </button>
@@ -362,7 +362,7 @@ export default function MonthlyView({
           <button
             type="button"
             onClick={onOpenYearOverview}
-            aria-label="연간 캘린더 보기"
+            aria-label="Calendar 보기"
             className="rounded-lg p-1.5 text-planner-sage transition hover:bg-planner-sage-light"
           >
             <CalendarIcon className="size-5" />

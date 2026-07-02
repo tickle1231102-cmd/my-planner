@@ -458,7 +458,7 @@ function AddColumnModal({ open, onClose, onAdd }) {
 
 function MobileTabBar({ active, onChange }) {
   return (
-    <div className="flex border-t border-planner-sand bg-planner-cream/95 lg:hidden">
+    <div className="flex border-t border-planner-sand bg-white lg:hidden">
       {[
         { id: 'calendar', label: '달력' },
         { id: 'notes', label: '일정 · 목표' },
@@ -487,7 +487,7 @@ function YearNavigator({ year, onChange }) {
   const canNext = index < AVAILABLE_YEARS.length - 1
 
   return (
-    <div className="flex shrink-0 items-center justify-center gap-4 border-b border-planner-sand bg-planner-year-gold/55 px-4 py-2.5">
+    <div className="flex shrink-0 items-center justify-center gap-4 border-b border-planner-sage-muted/40 bg-planner-sage-light px-4 py-2.5">
       <button
         type="button"
         disabled={!canPrev}
@@ -1117,7 +1117,13 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
             ? 'habit'
             : 'yearly'
   const headerTitle =
-    view === 'mandala' ? '만다라트' : view === 'habit' ? 'Habit Tracker' : '연간 플래너'
+    view === 'mandala'
+      ? '만다라트'
+      : view === 'habit'
+        ? 'Habit Tracker'
+        : view === 'yearOverview'
+          ? 'Calendar'
+          : 'Yearly'
   const quickNavActiveView =
     view === 'annual'
       ? 'yearly'
@@ -1130,8 +1136,8 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
       : view === 'habit'
         ? '한 달 습관을 주차별로 추적하세요'
         : view === 'yearOverview'
-          ? '12개월 연간 캘린더 · 날짜를 누르면 주간 플래너로 이동합니다'
-          : '날짜를 눌러 주간 플래너로 이동하세요'
+          ? '12개월 Calendar · 날짜를 누르면 Weekly로 이동합니다'
+          : '날짜를 눌러 Weekly로 이동하세요'
 
   useEffect(() => {
     if (view !== 'annual' || year === today.getFullYear()) return
@@ -1196,8 +1202,13 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
   }
 
   return (
-    <div className="flex h-svh flex-col">
-      <header className="sticky top-0 z-40 border-b border-planner-sand bg-planner-cream/90 backdrop-blur-md">
+    <div className={['flex h-svh flex-col', isPlannerView && 'bg-planner-cream'].filter(Boolean).join(' ')}>
+      <header
+        className={[
+          'sticky top-0 z-40 border-b border-planner-sand',
+          isPlannerView ? 'bg-white' : 'bg-planner-cream/90 backdrop-blur-md',
+        ].join(' ')}
+      >
         <div className="mx-auto flex max-w-[1600px] items-center justify-between px-4 py-3 sm:px-6">
           <div>
             <div className="flex items-center gap-2">
@@ -1209,7 +1220,7 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
                 <button
                   type="button"
                   onClick={toggleYearOverview}
-                  aria-label={view === 'yearOverview' ? '플래너 보기' : '연간 캘린더 보기'}
+                  aria-label={view === 'yearOverview' ? 'Yearly 보기' : 'Calendar 보기'}
                   aria-pressed={view === 'yearOverview'}
                   className={[
                     'rounded-lg p-1.5 transition',
@@ -1266,7 +1277,10 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
       </header>
 
       <main
-        className="scrollbar-thin min-h-0 flex-1 overflow-auto"
+        className={[
+          'scrollbar-thin min-h-0 flex-1 overflow-auto',
+          isPlannerView && 'bg-planner-cream',
+        ].filter(Boolean).join(' ')}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
