@@ -3,7 +3,7 @@ export function formatDateLabel(date) {
 }
 
 export function formatDateDayOnly(date) {
-  return `${date.getDate()}일`
+  return String(date.getDate())
 }
 
 export function formatDateWithWeekday(date, weekdayLabel) {

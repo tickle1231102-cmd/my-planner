@@ -44,7 +44,7 @@ function MandalaCell({ blockIndex, cellIndex, value, onChange }) {
         rows={2}
         className="h-full min-h-[2.25rem] w-full resize-none bg-transparent px-1 py-0.5 text-center text-[9px] leading-tight text-planner-ink placeholder:text-planner-ink-muted/40 focus:outline-none focus:ring-1 focus:ring-inset focus:ring-planner-sage/30 sm:min-h-[2.75rem] sm:px-1.5 sm:py-1 sm:text-[10px] md:text-xs"
         placeholder=""
-        aria-label={`만다라트 칸 ${globalCellIndex(blockIndex, cellIndex) + 1}`}
+        aria-label={`Mandal-Art cell ${globalCellIndex(blockIndex, cellIndex) + 1}`}
       />
     </div>
   )
@@ -112,10 +112,10 @@ export default function MandalartView() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="shrink-0">
             <p className="font-sans text-4xl font-medium tracking-tight text-planner-sage sm:text-5xl">
-              {year}
+              LIFE
             </p>
             <span className="mt-2 inline-block rounded-lg bg-planner-sage px-3 py-1 text-sm font-semibold text-white sm:text-base">
-              만다라트 차트
+              Mandal-Art
             </span>
           </div>
 
@@ -123,7 +123,7 @@ export default function MandalartView() {
             <p className="mb-2 text-center text-xs font-medium text-planner-sage sm:text-sm lg:text-left">
               <span className="inline-block">←</span>
               {' '}
-              {year}년 KEYWORD / {year}년 다짐
+              {year} KEYWORD / {year} Resolution
               {' '}
               <span className="inline-block">→</span>
             </p>
@@ -136,13 +136,13 @@ export default function MandalartView() {
                 type="text"
                 value={data.keyword}
                 onChange={(e) => patchData({ keyword: e.target.value })}
-                placeholder={`${year}년 키워드`}
+                placeholder={`${year} Keyword`}
                 className="mb-2 w-full border-b border-planner-sage/25 bg-transparent px-1 py-1 text-sm font-medium text-planner-ink placeholder:text-planner-ink-muted/50 focus:border-planner-sage focus:outline-none"
               />
               <textarea
                 value={data.resolution}
                 onChange={(e) => patchData({ resolution: e.target.value })}
-                placeholder={`${year}년 다짐을 적어 보세요`}
+                placeholder={`Write your ${year} resolution`}
                 rows={3}
                 className="w-full resize-none bg-transparent px-1 py-1 text-sm leading-relaxed text-planner-ink placeholder:text-planner-ink-muted/50 focus:outline-none"
               />
@@ -167,7 +167,7 @@ export default function MandalartView() {
           ))}
         </div>
         <p className="mt-4 text-center text-[11px] text-planner-ink-muted sm:text-xs">
-          가운데 노란 칸에 핵심 목표를, 초록 칸에 세부 목표와 실천 계획을 적어 보세요.
+          Write your core goal in the center yellow cell, and detailed goals and action plans in the green cells.
         </p>
       </div>
     </div>

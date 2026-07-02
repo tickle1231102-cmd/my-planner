@@ -30,6 +30,9 @@ const MONTH_LABELS = [
 ]
 
 const ROW_MIN_HEIGHT = 36
+const MOBILE_HEADER_TOP_HEIGHT = 24
+const MOBILE_HEADER_SUB_HEIGHT = 30
+const MOBILE_WEEK_ROW_HEIGHT = 48
 const MONTH_COL_WIDTH = 34
 const DAY_COL_MIN = 33
 const NOTE_COL_MIN = 100
@@ -238,12 +241,12 @@ function columnHeaderColor(columnId) {
   return 'bg-planner-warm text-planner-ink-muted'
 }
 
-function ColumnHeader({ column, onRemove, leadingDivider = false }) {
+function ColumnHeader({ column, onRemove, leadingDivider = false, fillHeight = false }) {
   const isDefault = DEFAULT_COLUMNS.some((c) => c.id === column.id)
 
   return (
     <div
-      className={`group relative flex min-h-[30px] items-center justify-center border-r border-planner-sand/60 px-1.5 py-1 text-center text-[11px] font-medium tracking-wide last:border-r-0 ${columnHeaderColor(column.id)} ${leadingDivider ? MEMO_CALENDAR_DIVIDER : ''}`}
+      className={`group relative flex items-center justify-center border-r border-planner-sand/60 px-1.5 text-center text-[11px] font-medium tracking-wide last:border-r-0 ${fillHeight ? 'h-full min-h-0 border-b border-planner-sand/60 py-0' : 'min-h-[30px] border-b border-planner-sand/60 py-1'} ${columnHeaderColor(column.id)} ${leadingDivider ? MEMO_CALENDAR_DIVIDER : ''}`}
     >
       <span>{column.label}</span>
       {!isDefault && onRemove && (
@@ -265,17 +268,33 @@ function CalendarCell({
   year,
   isToday,
   compact,
+  fillRow,
   highlightColor,
   onSelect,
   onColorMenu,
 }) {
+  const longPressTimerRef = useRef(null)
+  const longPressFiredRef = useRef(false)
+
   const inYear = date.getFullYear() === year
   const customBg = inYear && highlightColor ? DATE_COLOR_CELL[highlightColor] : null
 
+  const clearLongPress = useCallback(() => {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
+  }, [])
+
+  useEffect(() => () => clearLongPress(), [clearLongPress])
+
   const className = [
-    'flex w-full flex-col items-center justify-center gap-0 border-r border-planner-sand/50 text-center leading-none transition last:border-r-0',
+    'flex w-full flex-col items-center justify-center gap-0 border-r border-planner-sand/50 text-center leading-none transition last:border-r-0 select-none',
+    compact ? 'touch-manipulation [touch-callout:none]' : '',
     compact
-      ? 'min-h-[34px] px-0.5 py-0.5 text-[15px]'
+      ? fillRow
+        ? 'h-full min-h-0 px-0.5 py-0.5 text-sm'
+        : 'min-h-[34px] px-0.5 py-0.5 text-sm'
       : 'min-h-[36px] px-0.5 py-0.5 text-[16.5px]',
     !inYear && 'text-planner-ink-muted/35',
     inYear && !customBg && !isToday && 'bg-transparent',
@@ -294,13 +313,53 @@ function CalendarCell({
     onColorMenu(date, event)
   }
 
+  const handleTouchStart = (event) => {
+    if (!compact || !inYear || !onColorMenu) return
+    const touch = event.touches[0]
+    if (!touch) return
+    longPressFiredRef.current = false
+    clearLongPress()
+    longPressTimerRef.current = window.setTimeout(() => {
+      longPressFiredRef.current = true
+      onColorMenu(date, { clientX: touch.clientX, clientY: touch.clientY })
+      if (typeof navigator.vibrate === 'function') {
+        navigator.vibrate(12)
+      }
+    }, 480)
+  }
+
+  const handleTouchEnd = () => {
+    clearLongPress()
+  }
+
+  const handleTouchMove = () => {
+    clearLongPress()
+  }
+
+  const handleSelect = () => {
+    if (longPressFiredRef.current) {
+      longPressFiredRef.current = false
+      return
+    }
+    onSelect?.(date)
+  }
+
+  const touchHandlers = compact && inYear && onColorMenu
+    ? {
+        onTouchStart: handleTouchStart,
+        onTouchEnd: handleTouchEnd,
+        onTouchMove: handleTouchMove,
+        onTouchCancel: handleTouchEnd,
+      }
+    : {}
+
   const content = (
     <>
       <span className={inYear ? 'text-planner-ink' : ''}>
         {compact ? formatDateDayOnly(date) : formatDateLabel(date)}
       </span>
       {isToday && (
-        <span className="mt-px text-[12px] font-medium leading-none text-planner-today-ring">
+        <span className="mt-px text-[10px] font-medium leading-none text-planner-today-ring">
           오늘
         </span>
       )}
@@ -311,8 +370,9 @@ function CalendarCell({
     return (
       <button
         type="button"
-        onClick={() => onSelect(date)}
+        onClick={handleSelect}
         onContextMenu={handleContextMenu}
+        {...touchHandlers}
         className={className}
       >
         {content}
@@ -340,12 +400,16 @@ function DateColorMenu({ x, y, currentColor, onSelect, onClose }) {
       if (event.key === 'Escape') onClose()
     }
 
-    window.addEventListener('pointerdown', handlePointer)
+    const pointerTimer = window.setTimeout(() => {
+      window.addEventListener('pointerdown', handlePointer)
+    }, 320)
+
     window.addEventListener('keydown', handleKey)
     window.addEventListener('scroll', onClose, true)
     window.addEventListener('resize', onClose)
 
     return () => {
+      window.clearTimeout(pointerTimer)
       window.removeEventListener('pointerdown', handlePointer)
       window.removeEventListener('keydown', handleKey)
       window.removeEventListener('scroll', onClose, true)
@@ -456,6 +520,83 @@ function AddColumnModal({ open, onClose, onAdd }) {
   )
 }
 
+function MobileYearlyPanels({
+  mobileTab,
+  setMobileTab,
+  weeks,
+  year,
+  today,
+  monthSpans,
+  dateColors,
+  onDateSelect,
+  onColorMenu,
+  columns,
+  weekData,
+  updateCell,
+  removeColumn,
+  onAddColumn,
+}) {
+  const scrollRef = useRef(null)
+  const tabFromScrollRef = useRef(false)
+
+  useEffect(() => {
+    if (tabFromScrollRef.current) {
+      tabFromScrollRef.current = false
+      return
+    }
+    const el = scrollRef.current
+    if (!el) return
+    const idx = mobileTab === 'calendar' ? 0 : 1
+    const left = idx * el.clientWidth
+    if (Math.abs(el.scrollLeft - left) > 2) {
+      el.scrollTo({ left, behavior: 'smooth' })
+    }
+  }, [mobileTab])
+
+  const handleScroll = () => {
+    const el = scrollRef.current
+    if (!el || el.clientWidth === 0) return
+    const ratio = el.scrollLeft / el.clientWidth
+    let next = mobileTab
+    if (ratio > 0.65) next = 'notes'
+    else if (ratio < 0.35) next = 'calendar'
+    if (next !== mobileTab) {
+      tabFromScrollRef.current = true
+      setMobileTab(next)
+    }
+  }
+
+  return (
+    <div
+      ref={scrollRef}
+      onScroll={handleScroll}
+      className="flex overflow-x-auto overscroll-x-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
+      <div className="w-full shrink-0">
+        <MobileCalendar
+          weeks={weeks}
+          year={year}
+          today={today}
+          monthSpans={monthSpans}
+          dateColors={dateColors}
+          onDateSelect={onDateSelect}
+          onColorMenu={onColorMenu}
+        />
+      </div>
+      <div className="w-full shrink-0">
+        <MobileNotes
+          weeks={weeks}
+          columns={columns}
+          weekData={weekData}
+          updateCell={updateCell}
+          removeColumn={removeColumn}
+          onAddColumn={onAddColumn}
+        />
+      </div>
+    </div>
+  )
+}
+
 function MobileTabBar({ active, onChange }) {
   return (
     <div className="flex border-t border-planner-sand bg-white lg:hidden">
@@ -487,7 +628,7 @@ function YearNavigator({ year, onChange }) {
   const canNext = index < AVAILABLE_YEARS.length - 1
 
   return (
-    <div className="flex shrink-0 items-center justify-center gap-4 border-b border-planner-sage-muted/40 bg-planner-sage-light px-4 py-2.5">
+    <div className="flex shrink-0 items-center justify-center gap-4 border-b border-planner-sage/30 bg-planner-sage-muted px-4 py-2.5">
       <button
         type="button"
         disabled={!canPrev}
@@ -694,22 +835,24 @@ function MobileCalendar({ weeks, year, today, monthSpans, dateColors, onDateSele
       >
         <div
           className="border-b border-r border-planner-sand bg-planner-warm"
-          style={{ gridColumn: 1 }}
+          style={{ gridColumn: 1, height: MOBILE_HEADER_TOP_HEIGHT }}
         />
         <div
-          className="border-b border-r border-planner-sand bg-planner-sage-light/40"
-          style={{ gridColumn: '2 / 9' }}
-        />
+          className="flex items-center justify-center border-b border-r border-planner-sand bg-planner-sage-light/40 text-[10px] font-medium text-planner-sage"
+          style={{ gridColumn: '2 / 9', height: MOBILE_HEADER_TOP_HEIGHT }}
+        >
+          달력
+        </div>
         <div
           className="border-b border-r border-planner-sand bg-planner-warm"
-          style={{ gridColumn: 1 }}
+          style={{ gridColumn: 1, height: MOBILE_HEADER_SUB_HEIGHT }}
         />
         {DAY_LABELS.map((day, i) => (
           <div
             key={day}
-            style={{ gridColumn: i + 2 }}
+            style={{ gridColumn: i + 2, height: MOBILE_HEADER_SUB_HEIGHT }}
             className={[
-              'flex items-center justify-center border-b border-r border-planner-sand/60 py-1 text-[15px] font-medium',
+              'flex items-center justify-center border-b border-r border-planner-sand/60 text-[15px] font-medium',
               i === 5 && SATURDAY_DIVIDER,
               i >= 5 ? 'bg-planner-sage-light/80 text-planner-sage' : 'bg-planner-sage-light text-planner-sage',
             ].join(' ')}
@@ -744,7 +887,7 @@ function MobileCalendar({ weeks, year, today, monthSpans, dateColors, onDateSele
                   <div
                     key={i}
                     data-today-anchor={isToday ? 'true' : undefined}
-                    style={{ gridColumn: i + 2 }}
+                    style={{ gridColumn: i + 2, height: MOBILE_WEEK_ROW_HEIGHT }}
                     className={[
                       'border-b border-planner-sand/60',
                       rowBg,
@@ -759,6 +902,7 @@ function MobileCalendar({ weeks, year, today, monthSpans, dateColors, onDateSele
                       year={year}
                       isToday={isToday}
                       compact
+                      fillRow
                       highlightColor={dateColors[dateKey]}
                       onSelect={onDateSelect}
                       onColorMenu={onColorMenu}
@@ -787,39 +931,60 @@ function MobileNotes({
   return (
     <div className="overflow-x-auto">
       <div className="min-w-max" style={{ display: 'grid', gridTemplateColumns: gridCols }}>
-        {columns.map((col) => (
-          <ColumnHeader key={col.id} column={col} onRemove={removeColumn} />
+        <div
+          className="flex items-center justify-center border-b border-r border-planner-sand bg-planner-warm text-[10px] font-medium text-planner-ink-muted"
+          style={{ gridColumn: `1 / ${columns.length + 2}`, height: MOBILE_HEADER_TOP_HEIGHT }}
+        >
+          메모
+        </div>
+        {columns.map((col, colIndex) => (
+          <div
+            key={col.id}
+            style={{ height: MOBILE_HEADER_SUB_HEIGHT }}
+            className="overflow-hidden"
+          >
+            <ColumnHeader
+              column={col}
+              onRemove={removeColumn}
+              leadingDivider={colIndex === 0}
+              fillHeight
+            />
+          </div>
         ))}
         <button
           type="button"
           onClick={onAddColumn}
+          style={{ height: MOBILE_HEADER_SUB_HEIGHT }}
           className="flex items-center justify-center border-b border-planner-sand bg-planner-warm text-lg text-planner-sage"
           aria-label="항목 추가"
         >
           +
         </button>
 
-        {weeks.map((week, weekIndex) => {
+        {weeks.map((week) => {
           const isEvenMonth = week.primaryMonth % 2 === 0
           const rowBg = isEvenMonth ? 'bg-white' : 'bg-planner-warm'
 
           return (
             <div key={week.id} className="contents">
-              {columns.map((col) => (
+              {columns.map((col, colIndex) => (
                 <div
                   key={col.id}
-                  className={`border-b border-r border-planner-sand/40 ${rowBg}`}
-                  style={{ minHeight: ROW_MIN_HEIGHT }}
+                  className={`border-b border-r border-planner-sand/60 ${rowBg} ${colIndex === 0 ? MEMO_CALENDAR_DIVIDER : ''}`}
+                  style={{ height: MOBILE_WEEK_ROW_HEIGHT }}
                 >
                   <textarea
                     value={weekData[week.id]?.[col.id] || ''}
                     onChange={(e) => updateCell(week.id, col.id, e.target.value)}
-                    className="h-full w-full bg-transparent px-2 py-1 text-xs leading-snug text-planner-ink focus:bg-white/80 focus:outline-none"
+                    className="h-full w-full resize-none bg-transparent px-2 py-1 text-xs leading-snug text-planner-ink focus:bg-white/80 focus:outline-none"
                     rows={1}
                   />
                 </div>
               ))}
-              <div className={`border-b border-planner-sand/40 ${rowBg}`} />
+              <div
+                className={`border-b border-planner-sand/60 ${rowBg}`}
+                style={{ height: MOBILE_WEEK_ROW_HEIGHT }}
+              />
             </div>
           )
         })}
@@ -924,8 +1089,6 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
 
   const hasScrolledRef = useRef(false)
   const pendingTodayScrollRef = useRef(false)
-  const touchStartRef = useRef(null)
-
   const [mobileTab, setMobileTab] = useState(routeInit.tab)
   const [showAddColumn, setShowAddColumn] = useState(false)
   const [view, setView] = useState(routeInit.view)
@@ -1118,7 +1281,7 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
             : 'yearly'
   const headerTitle =
     view === 'mandala'
-      ? '만다라트'
+      ? 'Mandal-Art'
       : view === 'habit'
         ? 'Habit Tracker'
         : view === 'yearOverview'
@@ -1132,7 +1295,7 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
         : null
   const headerSubtitle =
     view === 'mandala'
-      ? '핵심 목표와 실천 계획을 만다라트로 정리하세요'
+      ? 'Manda(본질의 깨달음) + La(성취) + Art(기술)\n"본질에 집중하여 목적을 달성하게 돕는 만다라트로 목표와 계획을 관리하세요"'
       : view === 'habit'
         ? '한 달 습관을 주차별로 추적하세요'
         : view === 'yearOverview'
@@ -1187,20 +1350,6 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
     )
   }
 
-  const handleTouchStart = (e) => {
-    touchStartRef.current = e.touches[0].clientX
-  }
-
-  const handleTouchEnd = (e) => {
-    if (touchStartRef.current === null) return
-    const diff = e.changedTouches[0].clientX - touchStartRef.current
-    if (Math.abs(diff) > 60) {
-      if (diff < 0 && mobileTab === 'calendar') setMobileTab('notes')
-      if (diff > 0 && mobileTab === 'notes') setMobileTab('calendar')
-    }
-    touchStartRef.current = null
-  }
-
   return (
     <div className={['flex h-svh flex-col', isPlannerView && 'bg-planner-cream'].filter(Boolean).join(' ')}>
       <header
@@ -1241,7 +1390,16 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
                 onWeekly={() => navigateToAppView('weekly')}
               />
             </div>
-            <p className="text-xs text-planner-ink-muted sm:text-sm">{headerSubtitle}</p>
+            <p
+              className={[
+                'text-xs text-planner-ink-muted sm:text-sm',
+                view === 'mandala' && 'whitespace-pre-line',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            >
+              {headerSubtitle}
+            </p>
             <p className="mt-0.5 text-[11px] text-planner-sage">
               {nickname || userKey}
               {localOnly
@@ -1281,8 +1439,6 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
           'scrollbar-thin min-h-0 flex-1 overflow-auto',
           isPlannerView && 'bg-planner-cream',
         ].filter(Boolean).join(' ')}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
       >
         <div className="mx-auto max-w-[1600px] p-2 sm:p-3">
           {view === 'yearOverview' ? (
@@ -1323,30 +1479,26 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
           </div>
 
           <div className="overflow-hidden rounded-2xl border border-planner-sand bg-white shadow-soft lg:hidden">
-            {mobileTab === 'calendar' ? (
-              <MobileCalendar
-                weeks={weeks}
-                year={year}
-                today={today}
-                monthSpans={monthSpans}
-                dateColors={dateColors}
-                onDateSelect={openWeek}
-                onColorMenu={openColorMenu}
-              />
-            ) : (
-              <MobileNotes
-                weeks={weeks}
-                columns={columns}
-                weekData={weekData}
-                updateCell={updateCell}
-                removeColumn={removeColumn}
-                onAddColumn={() => setShowAddColumn(true)}
-              />
-            )}
+            <MobileYearlyPanels
+              mobileTab={mobileTab}
+              setMobileTab={setMobileTab}
+              weeks={weeks}
+              year={year}
+              today={today}
+              monthSpans={monthSpans}
+              dateColors={dateColors}
+              onDateSelect={openWeek}
+              onColorMenu={openColorMenu}
+              columns={columns}
+              weekData={weekData}
+              updateCell={updateCell}
+              removeColumn={removeColumn}
+              onAddColumn={() => setShowAddColumn(true)}
+            />
           </div>
 
           <p className="mt-3 text-center text-xs text-planner-ink-muted/60 lg:hidden">
-            좌우로 스와이프하여 달력과 일정을 전환할 수 있어요
+            좌우로 스크롤해 달력과 일정을 함께 볼 수 있어요
           </p>
             </>
           )}

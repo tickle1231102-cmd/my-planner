@@ -58,6 +58,10 @@ export function saveHabitData(data) {
   localStorage.setItem(HABIT_STORAGE_KEY, JSON.stringify(data))
 }
 
+export function clearHabitData() {
+  localStorage.removeItem(HABIT_STORAGE_KEY)
+}
+
 export function hasLocalHabitData() {
   const data = loadHabitData()
   return Object.keys(data).length > 0

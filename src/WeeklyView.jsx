@@ -868,6 +868,7 @@ function WeeklySidebarContent({
   days,
   memo,
   setMemo,
+  onOpenHabit,
 }) {
   return (
     <>
@@ -921,7 +922,7 @@ function WeeklySidebarContent({
         />
       </div>
 
-      <WeeklyHabitStrip days={days} compact={compact} />
+      <WeeklyHabitStrip days={days} compact={compact} onOpenHabit={onOpenHabit} />
 
       <SectionHeader compact={compact}>MEMO</SectionHeader>
       <textarea
@@ -1091,6 +1092,10 @@ export default function WeeklyView({
     paintColorId,
   })
 
+  const handleOpenHabit = useCallback(() => {
+    onNavigate?.('habit')
+  }, [onNavigate])
+
   const isDesktop = useIsDesktop()
 
   return (
@@ -1157,6 +1162,7 @@ export default function WeeklyView({
             days={days}
             memo={weekData.memo}
             setMemo={setMemo}
+            onOpenHabit={handleOpenHabit}
           />
         </aside>
 
@@ -1174,6 +1180,7 @@ export default function WeeklyView({
             days={days}
             memo={weekData.memo}
             setMemo={setMemo}
+            onOpenHabit={handleOpenHabit}
           />
         </aside>
 

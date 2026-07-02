@@ -15,6 +15,7 @@ import {
 } from '../lib/authAccount.js'
 import { fetchAppData, isSupabaseConfigured, persistAppData } from '../lib/cloudApi.js'
 import {
+  clearHabitData,
   hasLocalHabitData,
   isHabitDataEmpty,
   loadHabitData,
@@ -98,7 +99,8 @@ export function CloudSyncProvider({ children }) {
     setError('')
   }, [])
 
-  const hydrateAfterAuth = useCallback(async (key, name = '') => {
+  const hydrateAfterAuth = useCallback(async (key, name = '', options = {}) => {
+    const { isNewAccount = false } = options
     let cloud = await fetchAppData()
 
     if (isCloudEmpty(cloud) && hasLocalData()) {
@@ -107,7 +109,7 @@ export function CloudSyncProvider({ children }) {
         weekData: {},
       }
       const weekly_data = loadWeeklyFromLocal()
-      const habit_data = loadHabitData()
+      const habit_data = isNewAccount ? {} : loadHabitData()
       const mandala_data = loadMandalaData()
       const monthly_data = loadMonthlyData()
       cloud = await persistAppData({
@@ -118,7 +120,11 @@ export function CloudSyncProvider({ children }) {
         mandala_data,
         monthly_data,
       })
-    } else if (isHabitDataEmpty(cloud.habit_data) && hasLocalHabitData()) {
+    } else if (
+      !isNewAccount &&
+      isHabitDataEmpty(cloud.habit_data) &&
+      hasLocalHabitData()
+    ) {
       cloud = await persistAppData({
         habit_data: loadHabitData(),
       })
@@ -135,6 +141,11 @@ export function CloudSyncProvider({ children }) {
     }
 
     const profile = await getAuthenticatedProfile()
+
+    if (isNewAccount) {
+      cloud = { ...cloud, habit_data: {} }
+      clearHabitData()
+    }
 
     saveUserKey(key)
     setUserKey(key)
@@ -214,7 +225,7 @@ export function CloudSyncProvider({ children }) {
   )
 
   const runAuthAction = useCallback(
-    async (action) => {
+    async (action, options = {}) => {
       setLoading(true)
       setError('')
 
@@ -225,7 +236,7 @@ export function CloudSyncProvider({ children }) {
 
         const key = await action()
         const profile = await getAuthenticatedProfile()
-        await hydrateAfterAuth(key, profile?.nickname || '')
+        await hydrateAfterAuth(key, profile?.nickname || '', options)
         setLocalOnly(false)
         setReady(true)
       } catch (err) {
@@ -253,8 +264,9 @@ export function CloudSyncProvider({ children }) {
 
   const register = useCallback(
     (rawKey, password, rawNickname) =>
-      runAuthAction(() =>
-        registerWithUserKey(rawKey, password, rawNickname?.trim() || ''),
+      runAuthAction(
+        () => registerWithUserKey(rawKey, password, rawNickname?.trim() || ''),
+        { isNewAccount: true },
       ),
     [runAuthAction],
   )
@@ -269,8 +281,11 @@ export function CloudSyncProvider({ children }) {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     pendingSaveRef.current = {}
 
-    if (cloudEnabled && !localOnly) {
+    const wasCloudSession = cloudEnabled && !localOnly
+
+    if (wasCloudSession) {
       await signOutAccount()
+      clearHabitData()
     }
 
     clearUserKey()
@@ -280,7 +295,7 @@ export function CloudSyncProvider({ children }) {
     setLocalOnly(false)
     setAnnualData(withDefaultAnnual(loadAnnualFromLocal()))
     setWeeklyData(loadWeeklyFromLocal())
-    setHabitData(loadHabitData())
+    setHabitData(wasCloudSession ? {} : loadHabitData())
     setMandalaData(loadMandalaData())
     setMonthlyData(loadMonthlyData())
   }, [cloudEnabled, localOnly])

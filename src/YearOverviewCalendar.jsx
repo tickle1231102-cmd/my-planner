@@ -8,6 +8,7 @@ const MONTH_LABELS = [
   '7월', '8월', '9월', '10월', '11월', '12월',
 ]
 const OVERVIEW_DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토']
+const OVERVIEW_CALENDAR_CELLS = 42
 
 function isSameDay(a, b) {
   return (
@@ -30,6 +31,7 @@ function buildMonthCells(year, month) {
     cells.push(date)
   }
   while (cells.length % 7 !== 0) cells.push(null)
+  while (cells.length < OVERVIEW_CALENDAR_CELLS) cells.push(null)
 
   return cells
 }
@@ -39,7 +41,7 @@ function MiniMonth({ year, month, today, goals, onDateSelect, onUpdateGoal }) {
   const monthGoals = useMemo(() => padMonthGoals(goals), [goals])
 
   return (
-    <div className="flex flex-col items-center px-1 py-2">
+    <div className="flex h-full flex-col items-center px-1 py-2">
       <h3 className="mb-2 text-sm font-bold tracking-wide text-planner-ink sm:text-base">
         {MONTH_LABELS[month]}
       </h3>

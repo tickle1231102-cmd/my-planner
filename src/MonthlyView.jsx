@@ -141,7 +141,7 @@ function DayCell({ day, year, month, note, today, onNoteChange, onOpenWeek }) {
       <textarea
         value={note}
         onChange={(e) => onNoteChange(e.target.value)}
-        className="hidden min-h-0 flex-1 resize-none bg-transparent px-1.5 pb-1.5 pt-0 text-[10px] leading-snug text-planner-ink focus:outline-none focus:ring-1 focus:ring-inset focus:ring-planner-sage-muted/40 lg:block lg:text-xs"
+        className="min-h-0 flex-1 resize-none bg-transparent px-1 pb-1 pt-0 text-[10px] leading-snug text-planner-ink focus:outline-none focus:ring-1 focus:ring-inset focus:ring-planner-sage-muted/40 sm:px-1.5 sm:pb-1.5 sm:text-xs"
         placeholder=""
         aria-label={`${month + 1}월 ${day}일 메모`}
       />

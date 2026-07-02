@@ -27,7 +27,7 @@ function HabitDayCircle({ label, checked, onToggle, compact }) {
   )
 }
 
-export default function WeeklyHabitStrip({ days, compact = false }) {
+export default function WeeklyHabitStrip({ days, compact = false, onOpenHabit }) {
   const { habitData, updateHabitData } = useCloudSync()
   const { year, month } = useMemo(() => getDominantMonthAndYear(days), [days])
 
@@ -77,14 +77,27 @@ export default function WeeklyHabitStrip({ days, compact = false }) {
         compact ? 'px-2 py-1.5' : 'px-3 py-2.5',
       ].join(' ')}
     >
-      <div
-        className={[
-          'font-medium text-planner-ink',
-          compact ? 'mb-1.5 text-[8px] leading-tight' : 'mb-2 text-[10px] tracking-[0.08em]',
-        ].join(' ')}
-      >
-        Habit tracker
-      </div>
+      {onOpenHabit ? (
+        <button
+          type="button"
+          onClick={onOpenHabit}
+          className={[
+            'text-left font-medium text-planner-sage transition hover:text-planner-sage/80 hover:underline',
+            compact ? 'mb-1.5 text-[8px] leading-tight' : 'mb-2 text-[10px] tracking-[0.08em]',
+          ].join(' ')}
+        >
+          Habit tracker
+        </button>
+      ) : (
+        <div
+          className={[
+            'font-medium text-planner-ink',
+            compact ? 'mb-1.5 text-[8px] leading-tight' : 'mb-2 text-[10px] tracking-[0.08em]',
+          ].join(' ')}
+        >
+          Habit tracker
+        </div>
+      )}
       <div className={compact ? 'space-y-2' : 'space-y-2.5'}>
         {visibleHabits.map(({ habit, index }) => (
           <div key={habit.id}>

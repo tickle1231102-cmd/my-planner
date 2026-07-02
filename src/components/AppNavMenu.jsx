@@ -5,7 +5,7 @@ const NAV_ITEMS = [
   { id: 'yearly', label: 'Yearly' },
   { id: 'monthly', label: 'Monthly' },
   { id: 'weekly', label: 'Weekly' },
-  { id: 'mandala', label: '만다라트' },
+  { id: 'mandala', label: 'Mandal-Art' },
   { id: 'habit', label: 'Habit Tracker' },
 ]
 
