@@ -16,7 +16,9 @@ const HOURS = Array.from({ length: 24 }, (_, i) => (START_HOUR + i) % 24)
 const SLOTS_PER_HOUR = 6
 const TIMETABLE_ROW_HEIGHT = 24
 const TASK_LINES = HOURS.length
-const DAY_TASK_LINES = TASK_LINES - 3
+const TODO_TASK_COUNT = 6
+const NOT_TODO_TASK_COUNT = 3
+const DAY_TASK_LINES = TODO_TASK_COUNT + NOT_TODO_TASK_COUNT
 const TASK_ROW_HEIGHT = TIMETABLE_ROW_HEIGHT
 const TASK_HEADER_HEIGHT = 26
 const NOT_TODO_HEADER_HEIGHT = 22
@@ -25,8 +27,9 @@ const TIMETABLE_CELL_BORDER = 'border-planner-sage-muted/30'
 const HOUR_LABEL_WIDTH = 'w-6'
 const DAY_COLUMN_MIN_WIDTH = 'min-w-[84px]'
 const SIDEBAR_WIDTH = 'lg:w-[252px]'
-const TODO_TASK_COUNT = Math.floor(DAY_TASK_LINES / 2)
 const MOBILE_DAY_NOTE_HEIGHT = 52
+const TASK_LONG_PRESS_MS = 480
+const TASK_DRAG_LONG_PRESS_MS = 420
 
 const TIMETABLE_PAINT_COLORS = [
   {
@@ -117,6 +120,7 @@ function createDayTasks() {
     id: `task-${i}`,
     text: '',
     done: false,
+    postponed: false,
   }))
 }
 
@@ -127,12 +131,14 @@ function padDayTasks(tasks) {
       id: `task-${padded.length}`,
       text: '',
       done: false,
+      postponed: false,
     })
   }
   return padded.slice(0, DAY_TASK_LINES).map((t, i) => ({
     id: t.id || `task-${i}`,
     text: t.text || '',
     done: !!t.done,
+    postponed: !!t.postponed,
   }))
 }
 
@@ -189,6 +195,14 @@ function parseSlotKey(key) {
 function findSlotCell(target) {
   if (!(target instanceof Element)) return null
   return target.closest('[data-slot-key]')
+}
+
+function findDayDropZone(target) {
+  if (!(target instanceof Element)) return null
+  const zone = target.closest('[data-day-drop-zone]')
+  if (!zone) return null
+  const dayIdx = Number(zone.getAttribute('data-day-drop-zone'))
+  return Number.isNaN(dayIdx) ? null : dayIdx
 }
 
 function useSlotPainter(setSlotFilled, { locked, paintColorId }) {
@@ -366,7 +380,62 @@ function useWeeklyStorage(weekId) {
     [weekId, updateWeekly],
   )
 
-  return { weekData, setWeekGoal, setMemo, setDayNote, setDayTask, setSlotFilled }
+  const moveDayTask = useCallback(
+    (fromDayIdx, taskId, toDayIdx) => {
+      if (fromDayIdx === toDayIdx) return
+      updateWeekly((prev) => {
+        const current = normalizeWeekData(prev[weekId])
+        const fromTasks = [...current.dayTasks[fromDayIdx]]
+        const fromIndex = fromTasks.findIndex((t) => t.id === taskId)
+        if (fromIndex < 0) return prev
+
+        const moving = fromTasks[fromIndex]
+        if (!moving.done) return prev
+
+        const toTasks = [...current.dayTasks[toDayIdx]]
+        const emptyIndex = toTasks.findIndex(
+          (t) => !t.text.trim() && !t.done && !t.postponed,
+        )
+        if (emptyIndex < 0) return prev
+
+        toTasks[emptyIndex] = {
+          ...toTasks[emptyIndex],
+          text: moving.text,
+          done: moving.done,
+          postponed: moving.postponed,
+        }
+        fromTasks[fromIndex] = {
+          ...fromTasks[fromIndex],
+          text: '',
+          done: false,
+          postponed: false,
+        }
+
+        return {
+          ...prev,
+          [weekId]: {
+            ...current,
+            dayTasks: {
+              ...current.dayTasks,
+              [fromDayIdx]: fromTasks,
+              [toDayIdx]: toTasks,
+            },
+          },
+        }
+      })
+    },
+    [weekId, updateWeekly],
+  )
+
+  return {
+    weekData,
+    setWeekGoal,
+    setMemo,
+    setDayNote,
+    setDayTask,
+    setSlotFilled,
+    moveDayTask,
+  }
 }
 
 function SectionHeader({ children, compact = false }) {
@@ -384,7 +453,7 @@ function SectionHeader({ children, compact = false }) {
   )
 }
 
-function DottedCheckbox({ checked, onChange, className = '' }) {
+function DottedCheckbox({ checked, postponed, onChange, className = '' }) {
   return (
     <button
       type="button"
@@ -392,35 +461,123 @@ function DottedCheckbox({ checked, onChange, className = '' }) {
       aria-checked={checked}
       onClick={() => onChange(!checked)}
       className={[
-        'flex size-3.5 shrink-0 items-center justify-center border transition',
-        checked
-          ? 'border-planner-sage bg-planner-sage'
-          : 'border-dashed border-planner-ink-muted/50 bg-white',
+        'flex size-3.5 shrink-0 items-center justify-center border text-[10px] font-bold leading-none transition',
+        postponed
+          ? 'border-planner-sun bg-planner-sun/90 text-planner-ink'
+          : checked
+            ? 'border-planner-sage bg-planner-sage text-white'
+            : 'border-dashed border-planner-ink-muted/50 bg-white text-planner-ink',
         className,
       ].join(' ')}
     >
-      {checked && (
-        <svg
-          viewBox="0 0 12 12"
-          className="size-2.5 text-white"
-          fill="none"
-          aria-hidden
-        >
-          <path
-            d="M2.5 6.2 4.8 8.5 9.5 3.5"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+      {postponed ? (
+        <span aria-hidden>→</span>
+      ) : (
+        checked && (
+          <svg
+            viewBox="0 0 12 12"
+            className="size-2.5 text-white"
+            fill="none"
+            aria-hidden
+          >
+            <path
+              d="M2.5 6.2 4.8 8.5 9.5 3.5"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        )
       )}
     </button>
   )
 }
 
-function TaskRow({ task, onText, onToggle, inputRef, onEnter }) {
+function TaskPostponeMenu({ x, y, onPostpone, onClose }) {
+  const menuRef = useRef(null)
+
+  useEffect(() => {
+    const handlePointer = (event) => {
+      if (menuRef.current?.contains(event.target)) return
+      onClose()
+    }
+
+    const handleKey = (event) => {
+      if (event.key === 'Escape') onClose()
+    }
+
+    const pointerTimer = window.setTimeout(() => {
+      window.addEventListener('pointerdown', handlePointer)
+    }, 320)
+
+    window.addEventListener('keydown', handleKey)
+    window.addEventListener('scroll', onClose, true)
+    window.addEventListener('resize', onClose)
+
+    return () => {
+      window.clearTimeout(pointerTimer)
+      window.removeEventListener('pointerdown', handlePointer)
+      window.removeEventListener('keydown', handleKey)
+      window.removeEventListener('scroll', onClose, true)
+      window.removeEventListener('resize', onClose)
+    }
+  }, [onClose])
+
+  return (
+    <div
+      ref={menuRef}
+      className="fixed z-50 min-w-[120px] rounded-xl border border-planner-sand bg-white p-1.5 shadow-soft"
+      style={{ left: x, top: y }}
+      role="menu"
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      <button
+        type="button"
+        role="menuitem"
+        onClick={onPostpone}
+        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-planner-ink transition hover:bg-planner-warm"
+      >
+        <span className="font-semibold text-planner-sun">→</span>
+        미루기
+      </button>
+    </div>
+  )
+}
+
+function TaskRow({
+  task,
+  dayIdx,
+  onText,
+  onToggle,
+  onPostpone,
+  onStartTouchDrag,
+  inputRef,
+  onEnter,
+  touchDragEnabled = false,
+}) {
   const composingRef = useRef(false)
+  const longPressTimerRef = useRef(null)
+  const postponeTimerRef = useRef(null)
+  const touchDragTimerRef = useRef(null)
+  const touchStartRef = useRef(null)
+
+  const clearTimers = useCallback(() => {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
+    if (postponeTimerRef.current !== null) {
+      window.clearTimeout(postponeTimerRef.current)
+      postponeTimerRef.current = null
+    }
+    if (touchDragTimerRef.current !== null) {
+      window.clearTimeout(touchDragTimerRef.current)
+      touchDragTimerRef.current = null
+    }
+  }, [])
+
+  useEffect(() => () => clearTimers(), [clearTimers])
 
   const handleEnter = (e) => {
     if (e.key !== 'Enter') return
@@ -433,17 +590,92 @@ function TaskRow({ task, onText, onToggle, inputRef, onEnter }) {
     setTimeout(() => onEnter?.(), 20)
   }
 
+  const handleContextMenu = (event) => {
+    if (!onPostpone) return
+    event.preventDefault()
+    onPostpone(event)
+  }
+
+  const handleDragStart = (event) => {
+    if (!task.done) {
+      event.preventDefault()
+      return
+    }
+    event.dataTransfer.setData(
+      'application/json',
+      JSON.stringify({ dayIdx, taskId: task.id }),
+    )
+    event.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleTouchStart = (event) => {
+    if (event.touches.length !== 1) return
+    const touch = event.touches[0]
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY }
+
+    if (!task.done && onPostpone) {
+      postponeTimerRef.current = window.setTimeout(() => {
+        onPostpone({
+          clientX: touch.clientX,
+          clientY: touch.clientY,
+        })
+      }, TASK_LONG_PRESS_MS)
+    }
+
+    if (touchDragEnabled && task.done) {
+      touchDragTimerRef.current = window.setTimeout(() => {
+        onStartTouchDrag?.({
+          dayIdx,
+          taskId: task.id,
+          clientX: touch.clientX,
+          clientY: touch.clientY,
+        })
+        if (typeof navigator.vibrate === 'function') {
+          navigator.vibrate(12)
+        }
+      }, TASK_DRAG_LONG_PRESS_MS)
+    }
+  }
+
+  const handleTouchMove = (event) => {
+    const start = touchStartRef.current
+    if (!start || event.touches.length !== 1) return
+    const touch = event.touches[0]
+    const dx = touch.clientX - start.x
+    const dy = touch.clientY - start.y
+    if (dx * dx + dy * dy > 64) {
+      if (postponeTimerRef.current !== null) {
+        window.clearTimeout(postponeTimerRef.current)
+        postponeTimerRef.current = null
+      }
+    }
+  }
+
+  const handleTouchEnd = () => {
+    touchStartRef.current = null
+    clearTimers()
+  }
+
   return (
     <div
+      draggable={task.done}
+      onDragStart={handleDragStart}
+      onContextMenu={handleContextMenu}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
       className={[
         'flex items-center border-b',
         TIMETABLE_CELL_BORDER,
+        task.done ? 'cursor-grab active:cursor-grabbing' : '',
       ].join(' ')}
       style={{ height: TASK_ROW_HEIGHT }}
     >
       <DottedCheckbox
         checked={task.done}
-        onChange={(done) => onToggle({ done })}
+        postponed={task.postponed}
+        onChange={(done) => onToggle({ done, postponed: done ? false : task.postponed })}
         className="mx-2 shrink-0"
       />
       <input
@@ -469,25 +701,95 @@ function TaskRow({ task, onText, onToggle, inputRef, onEnter }) {
   )
 }
 
-function TaskList({ tasks, onText, onToggle, inputRefs, startIndex = 0 }) {
+function TaskList({
+  tasks,
+  dayIdx,
+  onText,
+  onToggle,
+  onPostpone,
+  onStartTouchDrag,
+  onTaskDrop,
+  inputRefs,
+  startIndex = 0,
+  touchDragEnabled = false,
+}) {
+  const handleDragOver = (event) => {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+  }
+
+  const handleDrop = (event) => {
+    event.preventDefault()
+    try {
+      const payload = JSON.parse(event.dataTransfer.getData('application/json'))
+      if (payload?.taskId != null && payload?.dayIdx != null) {
+        onTaskDrop?.(payload.dayIdx, payload.taskId, dayIdx)
+      }
+    } catch {
+      // ignore invalid drag payload
+    }
+  }
+
   return (
-    <>
+    <div
+      data-day-drop-zone={dayIdx}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
       {tasks.map((task, index) => {
         const globalIndex = startIndex + index
         return (
           <TaskRow
             key={task.id}
             task={task}
+            dayIdx={dayIdx}
+            touchDragEnabled={touchDragEnabled}
             inputRef={(el) => {
               inputRefs.current[globalIndex] = el
             }}
             onText={(text) => onText(task.id, text)}
             onToggle={(updates) => onToggle(task.id, updates)}
+            onPostpone={(event) => onPostpone?.(task.id, event)}
+            onStartTouchDrag={onStartTouchDrag}
             onEnter={() => inputRefs.current[globalIndex + 1]?.focus()}
           />
         )
       })}
-    </>
+    </div>
+  )
+}
+
+function computeDayAchievementRate(tasks) {
+  const active = tasks.filter((task) => task.text.trim())
+  if (active.length === 0) return 0
+  const done = active.filter((task) => task.done).length
+  return Math.round((done / active.length) * 100)
+}
+
+function DayAchievementBar({ percent, isToday, compact = false }) {
+  return (
+    <div
+      className={[
+        'shrink-0 border-t border-planner-sand/70 bg-planner-warm/35',
+        compact ? 'px-1.5 py-1.5' : 'px-2 py-2',
+      ].join(' ')}
+    >
+      <div
+        className={[
+          'mb-1 flex items-center justify-between font-medium text-planner-ink-muted',
+          compact ? 'text-[8px]' : 'text-[9px]',
+        ].join(' ')}
+      >
+        <span>{isToday ? '오늘 달성률' : '달성률'}</span>
+        <span className="text-planner-sage">{percent}%</span>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-planner-sand">
+        <div
+          className="h-full rounded-full bg-planner-sage transition-[width]"
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+    </div>
   )
 }
 
@@ -497,14 +799,83 @@ function DayTasksPanel({
   dayNote,
   setDayTask,
   setDayNote,
+  moveDayTask,
+  onPostponeTask,
+  onStartTouchDrag,
   showLabel,
   scrollable = false,
   compact = false,
+  touchDragEnabled = false,
+  dropHighlight = false,
+  isToday = false,
 }) {
   const inputRefs = useRef([])
   const todoTasks = tasks.slice(0, TODO_TASK_COUNT)
   const notTodoTasks = tasks.slice(TODO_TASK_COUNT)
   const noteHeight = compact ? MOBILE_DAY_NOTE_HEIGHT : DAY_NOTE_HEIGHT
+  const achievementRate = useMemo(() => computeDayAchievementRate(tasks), [tasks])
+
+  if (compact) {
+    return (
+      <div className="flex shrink-0 flex-col bg-white">
+        {showLabel && (
+          <p
+            className="flex shrink-0 items-center border-b border-planner-sand/70 bg-planner-warm/50 px-1.5 text-[8px] font-medium tracking-[0.08em] text-planner-ink-muted/70"
+            style={{ height: 22 }}
+          >
+            To do list
+          </p>
+        )}
+        <textarea
+          value={dayNote}
+          onChange={(e) => setDayNote(dayIdx, e.target.value)}
+          placeholder="메모"
+          className="w-full shrink-0 resize-none border-b border-planner-sand/70 bg-white px-1.5 py-1 text-[10px] leading-snug text-planner-ink placeholder:text-planner-ink-muted/40 focus:outline-none"
+          style={{ height: noteHeight }}
+        />
+        <div
+          data-day-drop-zone={dayIdx}
+          className={[
+            dropHighlight && 'bg-planner-sage-light/40 ring-2 ring-inset ring-planner-sage/40',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        >
+          <TaskList
+            tasks={todoTasks}
+            dayIdx={dayIdx}
+            inputRefs={inputRefs}
+            startIndex={0}
+            touchDragEnabled={touchDragEnabled}
+            onText={(taskId, text) => setDayTask(dayIdx, taskId, { text })}
+            onToggle={(taskId, updates) => setDayTask(dayIdx, taskId, updates)}
+            onPostpone={(taskId, event) => onPostponeTask?.(dayIdx, taskId, event)}
+            onStartTouchDrag={onStartTouchDrag}
+            onTaskDrop={moveDayTask}
+          />
+          <p
+            className="flex shrink-0 items-center border-y border-planner-sand/70 bg-planner-warm/50 px-1.5 text-[8px] font-medium tracking-[0.08em] text-planner-ink-muted/70"
+            style={{ height: 20 }}
+          >
+            Not to do list
+          </p>
+          <TaskList
+            tasks={notTodoTasks}
+            dayIdx={dayIdx}
+            inputRefs={inputRefs}
+            startIndex={TODO_TASK_COUNT}
+            touchDragEnabled={touchDragEnabled}
+            onText={(taskId, text) => setDayTask(dayIdx, taskId, { text })}
+            onToggle={(taskId, updates) => setDayTask(dayIdx, taskId, updates)}
+            onPostpone={(taskId, event) => onPostponeTask?.(dayIdx, taskId, event)}
+            onStartTouchDrag={onStartTouchDrag}
+            onTaskDrop={moveDayTask}
+          />
+        </div>
+        <DayAchievementBar percent={achievementRate} isToday={isToday} compact />
+      </div>
+    )
+  }
 
   return (
     <div className={['flex flex-col bg-white', scrollable ? 'min-h-0 flex-1' : 'h-full'].join(' ')}>
@@ -531,18 +902,27 @@ function DayTasksPanel({
         style={{ height: noteHeight }}
       />
       <div
-        className={
+        data-day-drop-zone={dayIdx}
+        className={[
           scrollable
             ? 'scrollbar-thin min-h-0 flex-1 overflow-y-auto'
-            : 'min-h-0 flex-1 overflow-hidden'
-        }
+            : 'shrink-0',
+          dropHighlight && 'bg-planner-sage-light/40 ring-2 ring-inset ring-planner-sage/40',
+        ]
+          .filter(Boolean)
+          .join(' ')}
       >
         <TaskList
           tasks={todoTasks}
+          dayIdx={dayIdx}
           inputRefs={inputRefs}
           startIndex={0}
+          touchDragEnabled={touchDragEnabled}
           onText={(taskId, text) => setDayTask(dayIdx, taskId, { text })}
           onToggle={(taskId, updates) => setDayTask(dayIdx, taskId, updates)}
+          onPostpone={(taskId, event) => onPostponeTask?.(dayIdx, taskId, event)}
+          onStartTouchDrag={onStartTouchDrag}
+          onTaskDrop={moveDayTask}
         />
         <p
           className={[
@@ -556,12 +936,18 @@ function DayTasksPanel({
         </p>
         <TaskList
           tasks={notTodoTasks}
+          dayIdx={dayIdx}
           inputRefs={inputRefs}
           startIndex={TODO_TASK_COUNT}
+          touchDragEnabled={touchDragEnabled}
           onText={(taskId, text) => setDayTask(dayIdx, taskId, { text })}
           onToggle={(taskId, updates) => setDayTask(dayIdx, taskId, updates)}
+          onPostpone={(taskId, event) => onPostponeTask?.(dayIdx, taskId, event)}
+          onStartTouchDrag={onStartTouchDrag}
+          onTaskDrop={moveDayTask}
         />
       </div>
+      <DayAchievementBar percent={achievementRate} isToday={isToday} compact={compact} />
     </div>
   )
 }
@@ -624,7 +1010,12 @@ function HourSlotRow({ dayIdx, hour, filledSlots, startPaint, locked }) {
 
 function DayTimetableColumn({ dayIdx, filledSlots, startPaint, showHourLabels, locked }) {
   return (
-    <div className="flex w-full flex-col touch-none select-none">
+    <div
+      className={[
+        'flex w-full flex-col select-none',
+        locked ? '' : 'touch-none',
+      ].join(' ')}
+    >
       {HOURS.map((hour) => (
         <div key={hour} className="flex w-full" style={{ height: TIMETABLE_ROW_HEIGHT }}>
           {showHourLabels && (
@@ -681,45 +1072,63 @@ function TimetableToolbar({
   onPaintColorChange,
   locked,
   onToggleLock,
+  collapsible = false,
+  expanded = true,
+  onToggleExpand,
 }) {
   return (
     <div className="flex h-[22px] shrink-0 items-center gap-1.5 border-b border-planner-sand/70 bg-planner-warm/50 px-2">
+      {collapsible && (
+        <button
+          type="button"
+          onClick={onToggleExpand}
+          aria-label={expanded ? '타임테이블 접기' : '타임테이블 펼치기'}
+          aria-expanded={expanded}
+          className="flex size-4 shrink-0 items-center justify-center rounded text-[10px] text-planner-sage transition hover:bg-planner-sand/70"
+        >
+          {expanded ? '▼' : '▶'}
+        </button>
+      )}
       <span className="shrink-0 text-[8px] font-medium tracking-[0.12em] text-planner-ink-muted/70">
         TIMETABLE
       </span>
-      <div className="flex items-center gap-1">
-        {TIMETABLE_PAINT_COLORS.map((color) => (
+      {(!collapsible || expanded) && (
+        <>
+          <div className="flex items-center gap-1">
+            {TIMETABLE_PAINT_COLORS.map((color) => (
+              <button
+                key={color.id}
+                type="button"
+                onClick={() => onPaintColorChange(color.id)}
+                aria-label={`타임테이블 색상: ${color.id}`}
+                aria-pressed={paintColorId === color.id}
+                className={[
+                  'size-3.5 shrink-0 rounded-full border border-white/70 shadow-sm transition',
+                  color.swatch,
+                  paintColorId === color.id
+                    ? 'ring-2 ring-planner-ink/20 ring-offset-1'
+                    : 'opacity-85 hover:opacity-100',
+                ].join(' ')}
+              />
+            ))}
+          </div>
           <button
-            key={color.id}
             type="button"
-            onClick={() => onPaintColorChange(color.id)}
-            aria-label={`타임테이블 색상: ${color.id}`}
-            aria-pressed={paintColorId === color.id}
+            onClick={onToggleLock}
+            aria-label={locked ? '타임테이블 잠금 해제' : '타임테이블 잠금'}
+            aria-pressed={locked}
+            title={locked ? '잠금 해제' : '잠금'}
             className={[
-              'size-3.5 shrink-0 rounded-full border border-white/70 shadow-sm transition',
-              color.swatch,
-              paintColorId === color.id
-                ? 'ring-2 ring-planner-ink/20 ring-offset-1'
-                : 'opacity-85 hover:opacity-100',
+              'ml-auto flex size-5 shrink-0 items-center justify-center rounded transition',
+              locked
+                ? 'bg-planner-sage/20 text-planner-sage'
+                : 'text-planner-ink-muted/45 hover:bg-planner-sand/70 hover:text-planner-ink-muted',
             ].join(' ')}
-          />
-        ))}
-      </div>
-      <button
-        type="button"
-        onClick={onToggleLock}
-        aria-label={locked ? '타임테이블 잠금 해제' : '타임테이블 잠금'}
-        aria-pressed={locked}
-        title={locked ? '잠금 해제' : '잠금'}
-        className={[
-          'ml-auto flex size-5 shrink-0 items-center justify-center rounded transition',
-          locked
-            ? 'bg-planner-sage/20 text-planner-sage'
-            : 'text-planner-ink-muted/45 hover:bg-planner-sand/70 hover:text-planner-ink-muted',
-        ].join(' ')}
-      >
-        <TimetableLockIcon locked={locked} />
-      </button>
+          >
+            <TimetableLockIcon locked={locked} />
+          </button>
+        </>
+      )}
     </div>
   )
 }
@@ -741,11 +1150,37 @@ function useIsDesktop() {
   return isDesktop
 }
 
+const ACHIEVEMENT_BAR_HEIGHT = 44
 const tasksPanelHeight =
   TASK_HEADER_HEIGHT +
   DAY_NOTE_HEIGHT +
   NOT_TODO_HEADER_HEIGHT +
-  DAY_TASK_LINES * TASK_ROW_HEIGHT
+  DAY_TASK_LINES * TASK_ROW_HEIGHT +
+  ACHIEVEMENT_BAR_HEIGHT
+
+function SidebarEdgeToggle({ expanded, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={expanded ? '사이드바 접기' : '사이드바 펼치기'}
+      aria-pressed={expanded}
+      className={[
+        'absolute top-0 z-20 flex h-[30px] w-5 items-center justify-center',
+        'rounded-r-md border border-l-0 border-planner-sand bg-white shadow-soft transition',
+        expanded ? 'right-0 translate-x-full' : 'left-0',
+      ].join(' ')}
+    >
+      <svg viewBox="0 0 8 10" className="size-2.5" aria-hidden>
+        {expanded ? (
+          <polygon points="8,0 0,5 8,10" className="fill-planner-sage" />
+        ) : (
+          <polygon points="0,0 8,5 0,10" className="fill-planner-sage" />
+        )}
+      </svg>
+    </button>
+  )
+}
 
 function MobileDayColumn({
   dayIdx,
@@ -754,17 +1189,30 @@ function MobileDayColumn({
   weekData,
   setDayTask,
   setDayNote,
+  moveDayTask,
+  onPostponeTask,
+  onStartTouchDrag,
   startPaint,
   paintColorId,
   onPaintColorChange,
   locked,
   onToggleLock,
+  dualColumn,
+  dropHighlight,
+  timetableExpanded,
+  onToggleTimetable,
 }) {
   const date = days[dayIdx]
   const isToday = isSameDay(date, today)
 
   return (
-    <div className="flex h-full min-w-full shrink-0 snap-start flex-col overflow-hidden">
+    <div
+      className={[
+        'flex h-full shrink-0 snap-start flex-col',
+        dualColumn ? 'min-w-[50%]' : 'min-w-full',
+      ].join(' ')}
+      data-day-column={dayIdx}
+    >
       <div
         className={[
           'shrink-0 border-b border-planner-sage/30 py-1 text-center text-[13px] font-semibold tracking-wide',
@@ -774,28 +1222,36 @@ function MobileDayColumn({
         {formatDateWithWeekday(date, DAY_LABELS[dayIdx])}
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="flex min-h-0 max-h-[48%] flex-col border-b border-planner-sand">
-          <DayTasksPanel
-            dayIdx={dayIdx}
-            tasks={weekData.dayTasks[dayIdx]}
-            dayNote={weekData.dayNotes[dayIdx] || ''}
-            setDayTask={setDayTask}
-            setDayNote={setDayNote}
-            showLabel
-            scrollable
-            compact
-          />
-        </div>
+      <div className="flex shrink-0 flex-col border-b border-planner-sand">
+        <DayTasksPanel
+          dayIdx={dayIdx}
+          tasks={weekData.dayTasks[dayIdx]}
+          dayNote={weekData.dayNotes[dayIdx] || ''}
+          setDayTask={setDayTask}
+          setDayNote={setDayNote}
+          moveDayTask={moveDayTask}
+          onPostponeTask={onPostponeTask}
+          onStartTouchDrag={onStartTouchDrag}
+          showLabel
+          compact
+          touchDragEnabled
+          dropHighlight={dropHighlight}
+          isToday={isToday}
+        />
+      </div>
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
-          <TimetableToolbar
-            paintColorId={paintColorId}
-            onPaintColorChange={onPaintColorChange}
-            locked={locked}
-            onToggleLock={onToggleLock}
-          />
-          <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
+        <TimetableToolbar
+          paintColorId={paintColorId}
+          onPaintColorChange={onPaintColorChange}
+          locked={locked}
+          onToggleLock={onToggleLock}
+          collapsible
+          expanded={timetableExpanded}
+          onToggleExpand={onToggleTimetable}
+        />
+        {timetableExpanded && (
+          <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
             <DayTimetableColumn
               dayIdx={dayIdx}
               filledSlots={weekData.filledSlots}
@@ -804,7 +1260,7 @@ function MobileDayColumn({
               locked={locked}
             />
           </div>
-        </div>
+        )}
       </div>
     </div>
   )
@@ -816,11 +1272,18 @@ function MobileWeekScroller({
   weekData,
   setDayTask,
   setDayNote,
+  moveDayTask,
+  onPostponeTask,
+  onStartTouchDrag,
   startPaint,
   paintColorId,
   onPaintColorChange,
   locked,
   onToggleLock,
+  dualColumn,
+  dropHighlightDay,
+  timetableExpanded,
+  onToggleTimetable,
 }) {
   const scrollRef = useRef(null)
 
@@ -828,14 +1291,18 @@ function MobileWeekScroller({
     const todayIdx = days.findIndex((day) => isSameDay(day, today))
     if (todayIdx < 0 || !scrollRef.current) return
 
-    const column = scrollRef.current.children[todayIdx]
-    column?.scrollIntoView({ inline: 'start', block: 'nearest' })
-  }, [days, today])
+    const el = scrollRef.current
+    const columnWidth = dualColumn ? el.clientWidth / 2 : el.clientWidth
+    el.scrollTo({ left: todayIdx * columnWidth, behavior: 'auto' })
+  }, [days, today, dualColumn])
 
   return (
     <div
       ref={scrollRef}
-      className="scrollbar-thin flex h-full snap-x snap-mandatory overflow-x-auto overflow-y-hidden"
+      className={[
+        'scrollbar-thin flex h-full overflow-x-auto overflow-y-hidden',
+        dualColumn ? 'snap-x snap-proximity' : 'snap-x snap-mandatory',
+      ].join(' ')}
     >
       {days.map((_, dayIdx) => (
         <MobileDayColumn
@@ -846,11 +1313,18 @@ function MobileWeekScroller({
           weekData={weekData}
           setDayTask={setDayTask}
           setDayNote={setDayNote}
+          moveDayTask={moveDayTask}
+          onPostponeTask={onPostponeTask}
+          onStartTouchDrag={onStartTouchDrag}
           startPaint={startPaint}
           paintColorId={paintColorId}
           onPaintColorChange={onPaintColorChange}
           locked={locked}
           onToggleLock={onToggleLock}
+          dualColumn={dualColumn}
+          dropHighlight={dropHighlightDay === dayIdx}
+          timetableExpanded={timetableExpanded}
+          onToggleTimetable={onToggleTimetable}
         />
       ))}
     </div>
@@ -947,6 +1421,8 @@ function DesktopWeekGrid({
   weekData,
   setDayTask,
   setDayNote,
+  moveDayTask,
+  onPostponeTask,
   startPaint,
   paintColorId,
   onPaintColorChange,
@@ -974,14 +1450,17 @@ function DesktopWeekGrid({
       </div>
 
       <div className="flex">
-        {dayIndices.map((di) => (
+        {dayIndices.map((di) => {
+          const date = days[di]
+          const dayIsToday = isSameDay(date, today)
+          return (
           <div
             key={di}
             className={`${DAY_COLUMN_MIN_WIDTH} flex-1 border-r border-planner-sand last:border-r-0`}
           >
             <div
               className="border-b border-planner-sand"
-              style={{ height: tasksPanelHeight }}
+              style={{ minHeight: tasksPanelHeight }}
             >
               <DayTasksPanel
                 dayIdx={di}
@@ -989,11 +1468,14 @@ function DesktopWeekGrid({
                 dayNote={weekData.dayNotes[di] || ''}
                 setDayTask={setDayTask}
                 setDayNote={setDayNote}
+                moveDayTask={moveDayTask}
+                onPostponeTask={onPostponeTask}
                 showLabel
+                isToday={dayIsToday}
               />
             </div>
           </div>
-        ))}
+        )})}
       </div>
 
       <div className="flex border-b border-planner-sand/70 bg-planner-warm/50">
@@ -1056,7 +1538,7 @@ export default function WeeklyView({
 }) {
   const weekId = useMemo(() => getWeekIdFromMonday(weekMonday), [weekMonday])
   const days = useMemo(() => getWeekDays(weekMonday), [weekMonday])
-  const { weekData, setWeekGoal, setMemo, setDayNote, setDayTask, setSlotFilled } =
+  const { weekData, setWeekGoal, setMemo, setDayNote, setDayTask, setSlotFilled, moveDayTask } =
     useWeeklyStorage(weekId)
 
   const { year: goalYear, month: goalMonth } = useMemo(
@@ -1085,7 +1567,13 @@ export default function WeeklyView({
   )
 
   const [paintColorId, setPaintColorId] = useState(DEFAULT_TIMETABLE_COLOR)
-  const [timetableLocked, setTimetableLocked] = useState(false)
+  const [timetableLocked, setTimetableLocked] = useState(true)
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+  const [mobileTimetableExpanded, setMobileTimetableExpanded] = useState(true)
+  const [postponeMenu, setPostponeMenu] = useState(null)
+  const [touchDrag, setTouchDrag] = useState(null)
+  const [dropHighlightDay, setDropHighlightDay] = useState(null)
+  const touchDragMetaRef = useRef(null)
 
   const { startPaint } = useSlotPainter(setSlotFilled, {
     locked: timetableLocked,
@@ -1096,7 +1584,83 @@ export default function WeeklyView({
     onNavigate?.('habit')
   }, [onNavigate])
 
+  const handlePostponeTask = useCallback((dayIdx, taskId, event) => {
+    setPostponeMenu({
+      x: event.clientX,
+      y: event.clientY,
+      dayIdx,
+      taskId,
+    })
+  }, [])
+
+  const closePostponeMenu = useCallback(() => {
+    setPostponeMenu(null)
+  }, [])
+
+  const applyPostpone = useCallback(() => {
+    if (!postponeMenu) return
+    setDayTask(postponeMenu.dayIdx, postponeMenu.taskId, {
+      postponed: true,
+      done: false,
+    })
+    setPostponeMenu(null)
+  }, [postponeMenu, setDayTask])
+
+  const handleStartTouchDrag = useCallback((payload) => {
+    touchDragMetaRef.current = {
+      fromDayIdx: payload.dayIdx,
+      taskId: payload.taskId,
+    }
+    setTouchDrag({
+      x: payload.clientX,
+      y: payload.clientY,
+    })
+    setPostponeMenu(null)
+  }, [])
+
+  useEffect(() => {
+    if (!touchDrag) return
+
+    const handlePointerMove = (event) => {
+      setTouchDrag({
+        x: event.clientX,
+        y: event.clientY,
+      })
+      const zone = findDayDropZone(document.elementFromPoint(event.clientX, event.clientY))
+      setDropHighlightDay(zone)
+    }
+
+    const finish = (event) => {
+      const meta = touchDragMetaRef.current
+      if (meta) {
+        const zone = findDayDropZone(document.elementFromPoint(event.clientX, event.clientY))
+        if (zone !== null && zone !== meta.fromDayIdx) {
+          moveDayTask(meta.fromDayIdx, meta.taskId, zone)
+        }
+      }
+      touchDragMetaRef.current = null
+      setTouchDrag(null)
+      setDropHighlightDay(null)
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', finish)
+    window.addEventListener('pointercancel', finish)
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', finish)
+      window.removeEventListener('pointercancel', finish)
+    }
+  }, [touchDrag !== null, moveDayTask])
+
   const isDesktop = useIsDesktop()
+  const toggleMobileSidebar = useCallback(() => {
+    setMobileSidebarOpen((open) => !open)
+  }, [])
+  const toggleMobileTimetable = useCallback(() => {
+    setMobileTimetableExpanded((open) => !open)
+  }, [])
 
   return (
     <div className="flex h-full flex-col bg-planner-cream">
@@ -1166,23 +1730,32 @@ export default function WeeklyView({
           />
         </aside>
 
-        <aside
-          className={`flex h-full min-h-0 shrink-0 flex-col overflow-y-auto border-r border-planner-sand bg-white ${MOBILE_RAIL_WIDTH_CLASS} lg:hidden`}
+        <div
+          className={[
+            'relative h-full min-h-0 shrink-0 overflow-visible transition-[width] duration-200 lg:hidden',
+            mobileSidebarOpen ? MOBILE_RAIL_WIDTH_CLASS : 'w-0',
+          ].join(' ')}
         >
-          <WeeklySidebarContent
-            compact
-            weekLabel={weekLabel}
-            goalMonth={goalMonth}
-            syncedMonthGoals={syncedMonthGoals}
-            weekGoals={weekData.weekGoals}
-            handleMonthGoalUpdate={handleMonthGoalUpdate}
-            handleWeekGoalUpdate={handleWeekGoalUpdate}
-            days={days}
-            memo={weekData.memo}
-            setMemo={setMemo}
-            onOpenHabit={handleOpenHabit}
+          <aside className="h-full overflow-y-auto overflow-x-hidden border-r border-planner-sand bg-white">
+            <WeeklySidebarContent
+              compact
+              weekLabel={weekLabel}
+              goalMonth={goalMonth}
+              syncedMonthGoals={syncedMonthGoals}
+              weekGoals={weekData.weekGoals}
+              handleMonthGoalUpdate={handleMonthGoalUpdate}
+              handleWeekGoalUpdate={handleWeekGoalUpdate}
+              days={days}
+              memo={weekData.memo}
+              setMemo={setMemo}
+              onOpenHabit={handleOpenHabit}
+            />
+          </aside>
+          <SidebarEdgeToggle
+            expanded={mobileSidebarOpen}
+            onClick={toggleMobileSidebar}
           />
-        </aside>
+        </div>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <div className="scrollbar-thin min-h-0 flex-1 overflow-hidden lg:overflow-auto">
@@ -1194,6 +1767,8 @@ export default function WeeklyView({
                 weekData={weekData}
                 setDayTask={setDayTask}
                 setDayNote={setDayNote}
+                moveDayTask={moveDayTask}
+                onPostponeTask={handlePostponeTask}
                 startPaint={startPaint}
                 paintColorId={paintColorId}
                 onPaintColorChange={setPaintColorId}
@@ -1207,16 +1782,44 @@ export default function WeeklyView({
                 weekData={weekData}
                 setDayTask={setDayTask}
                 setDayNote={setDayNote}
+                moveDayTask={moveDayTask}
+                onPostponeTask={handlePostponeTask}
+                onStartTouchDrag={handleStartTouchDrag}
                 startPaint={startPaint}
                 paintColorId={paintColorId}
                 onPaintColorChange={setPaintColorId}
                 locked={timetableLocked}
                 onToggleLock={() => setTimetableLocked((prev) => !prev)}
+                dualColumn={!mobileSidebarOpen}
+                dropHighlightDay={dropHighlightDay}
+                timetableExpanded={mobileTimetableExpanded}
+                onToggleTimetable={toggleMobileTimetable}
               />
             )}
           </div>
         </div>
       </div>
+
+      {postponeMenu && (
+        <TaskPostponeMenu
+          x={postponeMenu.x}
+          y={postponeMenu.y}
+          onPostpone={applyPostpone}
+          onClose={closePostponeMenu}
+        />
+      )}
+
+      {touchDrag && (
+        <div
+          className="pointer-events-none fixed z-[70] rounded-lg border border-planner-sage bg-white/95 px-3 py-2 text-xs font-medium text-planner-ink shadow-soft"
+          style={{
+            left: touchDrag.x + 12,
+            top: touchDrag.y + 12,
+          }}
+        >
+          다른 요일로 이동
+        </div>
+      )}
     </div>
   )
 }
