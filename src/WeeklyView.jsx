@@ -785,11 +785,11 @@ function DayAchievementBar({ percent, isToday, compact = false }) {
         ].join(' ')}
       >
         <span>{isToday ? '오늘 달성률' : '달성률'}</span>
-        <span className="text-planner-sage">{percent}%</span>
+        <span className="text-planner-deep-terracotta">{percent}%</span>
       </div>
       <div className="h-1.5 overflow-hidden rounded-full bg-planner-sand">
         <div
-          className="h-full rounded-full bg-planner-sage transition-[width]"
+          className="h-full rounded-full bg-planner-deep-terracotta transition-[width]"
           style={{ width: `${percent}%` }}
         />
       </div>
