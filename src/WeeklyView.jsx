@@ -976,10 +976,10 @@ function TimeCell({ dayIdx, hour, slot, colorId, startPaint, locked }) {
         startPaint(key, colorId)
       }}
       className={[
-        'min-h-0 min-w-0 w-full touch-none select-none border-r border-b last:border-r-0',
+        'min-h-0 min-w-0 w-full select-none border-r border-b last:border-r-0',
         TIMETABLE_CELL_BORDER,
         'transition',
-        locked ? 'cursor-default' : 'cursor-pointer active:opacity-80',
+        locked ? 'touch-pan-y cursor-default' : 'touch-none cursor-pointer active:opacity-80',
         colorId ? filledClass : 'bg-white hover:bg-planner-sage-light/35',
       ].join(' ')}
       style={{ height: TIMETABLE_ROW_HEIGHT, minHeight: TIMETABLE_ROW_HEIGHT }}
@@ -1014,12 +1014,7 @@ function HourSlotRow({ dayIdx, hour, filledSlots, startPaint, locked }) {
 
 function DayTimetableColumn({ dayIdx, filledSlots, startPaint, showHourLabels, locked }) {
   return (
-    <div
-      className={[
-        'flex w-full flex-col select-none',
-        locked ? '' : 'touch-none',
-      ].join(' ')}
-    >
+    <div className="flex w-full flex-col select-none">
       {HOURS.map((hour) => (
         <div key={hour} className="flex w-full" style={{ height: TIMETABLE_ROW_HEIGHT }}>
           {showHourLabels && (
@@ -1270,7 +1265,7 @@ function MobileDayColumn({
           onToggleExpand={onToggleTimetable}
         />
         {timetableExpanded && (
-          <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
+          <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto overscroll-y-contain touch-pan-y">
             <DayTimetableColumn
               dayIdx={dayIdx}
               filledSlots={filledSlots}
@@ -1312,9 +1307,21 @@ function MobileWeekScroller({
     const todayIdx = days.findIndex((day) => isSameDay(day, today))
     if (todayIdx < 0 || !scrollRef.current) return
 
-    const el = scrollRef.current
-    const columnWidth = dualColumn ? el.clientWidth / 2 : el.clientWidth
-    el.scrollTo({ left: todayIdx * columnWidth, behavior: 'auto' })
+    const scrollToToday = () => {
+      const el = scrollRef.current
+      if (!el) return
+      const column = el.querySelector(`[data-day-column="${todayIdx}"]`)
+      if (column) {
+        column.scrollIntoView({ inline: 'start', block: 'nearest', behavior: 'auto' })
+        return
+      }
+      const columnWidth = dualColumn ? el.clientWidth / 2 : el.clientWidth
+      el.scrollTo({ left: todayIdx * columnWidth, behavior: 'auto' })
+    }
+
+    scrollToToday()
+    const frame = window.requestAnimationFrame(scrollToToday)
+    return () => window.cancelAnimationFrame(frame)
   }, [days, today, dualColumn])
 
   return (
@@ -1617,7 +1624,7 @@ export default function WeeklyView({
 
   const [paintColorId, setPaintColorId] = useState(DEFAULT_TIMETABLE_COLOR)
   const [timetableLocked, setTimetableLocked] = useState(true)
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(true)
   const [mobileTimetableExpanded, setMobileTimetableExpanded] = useState(true)
   const [postponeMenu, setPostponeMenu] = useState(null)
   const [touchDrag, setTouchDrag] = useState(null)
