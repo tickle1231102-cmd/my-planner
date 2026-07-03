@@ -8,6 +8,22 @@ import { AppNavMenu } from './components/AppNavMenu.jsx'
 import { CalendarIcon } from './components/CalendarIcon.jsx'
 import { PlannerQuickNav } from './components/PlannerQuickNav.jsx'
 import WeeklyHabitStrip, { MOBILE_RAIL_WIDTH_CLASS } from './components/WeeklyHabitStrip.jsx'
+import TimetableRoutinePanel from './components/TimetableRoutinePanel.jsx'
+import { TimetableRoutineIcon } from './components/TimetableRoutineIcon.jsx'
+import WeeklySidebarMonthCalendar from './components/WeeklySidebarMonthCalendar.jsx'
+import {
+  DEFAULT_TIMETABLE_COLOR,
+  TIMETABLE_COLOR_BY_ID,
+  TIMETABLE_PAINT_COLORS,
+} from './lib/timetableColors.js'
+import {
+  TIMETABLE_ROUTINES_KEY,
+  computeRoutineSlots,
+  mergeFilledSlots,
+  normalizeRoutines,
+  toDateKey,
+} from './lib/timetableRoutines.js'
+import { buildChecklistDateKeys } from './lib/weeklyChecklist.js'
 
 const WEEKLY_STORAGE_KEY = 'weekly-planner-v2'
 const DAY_LABELS = ['월', '화', '수', '목', '금', '토', '일']
@@ -31,43 +47,11 @@ const MOBILE_DAY_NOTE_HEIGHT = 52
 const TASK_LONG_PRESS_MS = 480
 const TASK_DRAG_LONG_PRESS_MS = 420
 
-const TIMETABLE_PAINT_COLORS = [
-  {
-    id: 'sage',
-    swatch: 'bg-planner-sage',
-    filled: 'bg-planner-sage/65 hover:bg-planner-sage/75',
-  },
-  {
-    id: 'mint',
-    swatch: 'bg-planner-today-ring',
-    filled: 'bg-planner-today-ring/55 hover:bg-planner-today-ring/65',
-  },
-  {
-    id: 'mist',
-    swatch: 'bg-planner-mist',
-    filled: 'bg-planner-mist/50 hover:bg-planner-mist/60',
-  },
-  {
-    id: 'sun',
-    swatch: 'bg-planner-sun',
-    filled: 'bg-planner-sun/70 hover:bg-planner-sun/80',
-  },
-  {
-    id: 'peach',
-    swatch: 'bg-planner-peach',
-    filled: 'bg-planner-peach/65 hover:bg-planner-peach/75',
-  },
-]
-
-const TIMETABLE_COLOR_BY_ID = Object.fromEntries(
-  TIMETABLE_PAINT_COLORS.map((color) => [color.id, color]),
-)
-const DEFAULT_TIMETABLE_COLOR = TIMETABLE_PAINT_COLORS[0].id
-
 function migrateFilledSlots(slots) {
   const next = {}
   for (const [key, value] of Object.entries(slots || {})) {
-    if (value === true) next[key] = DEFAULT_TIMETABLE_COLOR
+    if (value === false) next[key] = false
+    else if (value === true) next[key] = DEFAULT_TIMETABLE_COLOR
     else if (typeof value === 'string' && TIMETABLE_COLOR_BY_ID[value]) next[key] = value
   }
   return next
@@ -367,9 +351,9 @@ function useWeeklyStorage(weekId) {
       updateWeekly((prev) => {
         const current = normalizeWeekData(prev[weekId])
         const currentValue = current.filledSlots[key]
-        if (currentValue === value || (!value && !currentValue)) return prev
+        if (currentValue === value) return prev
         const next = { ...current.filledSlots }
-        if (!value) delete next[key]
+        if (!value) next[key] = false
         else next[key] = value
         return {
           ...prev,
@@ -436,6 +420,26 @@ function useWeeklyStorage(weekId) {
     setSlotFilled,
     moveDayTask,
   }
+}
+
+function useTimetableRoutines() {
+  const { weeklyData, updateWeekly } = useCloudSync()
+  const routines = useMemo(
+    () => normalizeRoutines(weeklyData[TIMETABLE_ROUTINES_KEY]),
+    [weeklyData],
+  )
+
+  const setRoutines = useCallback(
+    (nextRoutines) => {
+      updateWeekly((prev) => ({
+        ...prev,
+        [TIMETABLE_ROUTINES_KEY]: normalizeRoutines(nextRoutines),
+      }))
+    },
+    [updateWeekly],
+  )
+
+  return { routines, setRoutines }
 }
 
 function SectionHeader({ children, compact = false }) {
@@ -1072,6 +1076,7 @@ function TimetableToolbar({
   onPaintColorChange,
   locked,
   onToggleLock,
+  onOpenRoutines,
   collapsible = false,
   expanded = true,
   onToggleExpand,
@@ -1112,21 +1117,32 @@ function TimetableToolbar({
               />
             ))}
           </div>
-          <button
-            type="button"
-            onClick={onToggleLock}
-            aria-label={locked ? '타임테이블 잠금 해제' : '타임테이블 잠금'}
-            aria-pressed={locked}
-            title={locked ? '잠금 해제' : '잠금'}
-            className={[
-              'ml-auto flex size-5 shrink-0 items-center justify-center rounded transition',
-              locked
-                ? 'bg-planner-sage/20 text-planner-sage'
-                : 'text-planner-ink-muted/45 hover:bg-planner-sand/70 hover:text-planner-ink-muted',
-            ].join(' ')}
-          >
-            <TimetableLockIcon locked={locked} />
-          </button>
+          <div className="ml-auto flex items-center gap-0.5">
+            <button
+              type="button"
+              onClick={onOpenRoutines}
+              aria-label="반복 루틴 설정"
+              title="반복 루틴"
+              className="flex size-5 shrink-0 items-center justify-center rounded text-planner-ink-muted transition hover:bg-planner-sand/70 hover:text-planner-sage"
+            >
+              <TimetableRoutineIcon className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={onToggleLock}
+              aria-label={locked ? '타임테이블 잠금 해제' : '타임테이블 잠금'}
+              aria-pressed={locked}
+              title={locked ? '잠금 해제' : '잠금'}
+              className={[
+                'flex size-5 shrink-0 items-center justify-center rounded transition',
+                locked
+                  ? 'bg-planner-sage/20 text-planner-sage'
+                  : 'text-planner-ink-muted/45 hover:bg-planner-sand/70 hover:text-planner-ink-muted',
+              ].join(' ')}
+            >
+              <TimetableLockIcon locked={locked} />
+            </button>
+          </div>
         </>
       )}
     </div>
@@ -1187,6 +1203,7 @@ function MobileDayColumn({
   days,
   today,
   weekData,
+  filledSlots,
   setDayTask,
   setDayNote,
   moveDayTask,
@@ -1197,6 +1214,7 @@ function MobileDayColumn({
   onPaintColorChange,
   locked,
   onToggleLock,
+  onOpenRoutines,
   dualColumn,
   dropHighlight,
   timetableExpanded,
@@ -1246,6 +1264,7 @@ function MobileDayColumn({
           onPaintColorChange={onPaintColorChange}
           locked={locked}
           onToggleLock={onToggleLock}
+          onOpenRoutines={onOpenRoutines}
           collapsible
           expanded={timetableExpanded}
           onToggleExpand={onToggleTimetable}
@@ -1254,7 +1273,7 @@ function MobileDayColumn({
           <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
             <DayTimetableColumn
               dayIdx={dayIdx}
-              filledSlots={weekData.filledSlots}
+              filledSlots={filledSlots}
               startPaint={startPaint}
               showHourLabels
               locked={locked}
@@ -1270,6 +1289,7 @@ function MobileWeekScroller({
   days,
   today,
   weekData,
+  filledSlots,
   setDayTask,
   setDayNote,
   moveDayTask,
@@ -1280,6 +1300,7 @@ function MobileWeekScroller({
   onPaintColorChange,
   locked,
   onToggleLock,
+  onOpenRoutines,
   dualColumn,
   dropHighlightDay,
   timetableExpanded,
@@ -1311,6 +1332,7 @@ function MobileWeekScroller({
           days={days}
           today={today}
           weekData={weekData}
+          filledSlots={filledSlots}
           setDayTask={setDayTask}
           setDayNote={setDayNote}
           moveDayTask={moveDayTask}
@@ -1321,6 +1343,7 @@ function MobileWeekScroller({
           onPaintColorChange={onPaintColorChange}
           locked={locked}
           onToggleLock={onToggleLock}
+          onOpenRoutines={onOpenRoutines}
           dualColumn={dualColumn}
           dropHighlight={dropHighlightDay === dayIdx}
           timetableExpanded={timetableExpanded}
@@ -1334,12 +1357,15 @@ function MobileWeekScroller({
 function WeeklySidebarContent({
   compact,
   weekLabel,
+  goalYear,
   goalMonth,
   syncedMonthGoals,
   weekGoals,
   handleMonthGoalUpdate,
   handleWeekGoalUpdate,
   days,
+  today,
+  checklistDateKeys,
   memo,
   setMemo,
   onOpenHabit,
@@ -1361,6 +1387,14 @@ function WeeklySidebarContent({
           >
             {weekLabel}
           </p>
+          <WeeklySidebarMonthCalendar
+            year={goalYear}
+            month={goalMonth}
+            weekDays={days}
+            checklistDateKeys={checklistDateKeys}
+            today={today}
+            compact={compact}
+          />
         </div>
       )}
 
@@ -1419,6 +1453,7 @@ function DesktopWeekGrid({
   days,
   today,
   weekData,
+  filledSlots,
   setDayTask,
   setDayNote,
   moveDayTask,
@@ -1428,6 +1463,7 @@ function DesktopWeekGrid({
   onPaintColorChange,
   locked,
   onToggleLock,
+  onOpenRoutines,
 }) {
   return (
     <div className="min-w-[700px]">
@@ -1492,6 +1528,7 @@ function DesktopWeekGrid({
             onPaintColorChange={onPaintColorChange}
             locked={locked}
             onToggleLock={onToggleLock}
+            onOpenRoutines={onOpenRoutines}
           />
         </div>
       </div>
@@ -1504,7 +1541,7 @@ function DesktopWeekGrid({
           >
             <DayTimetableColumn
               dayIdx={di}
-              filledSlots={weekData.filledSlots}
+              filledSlots={filledSlots}
               startPaint={startPaint}
               showHourLabels
               locked={locked}
@@ -1538,8 +1575,15 @@ export default function WeeklyView({
 }) {
   const weekId = useMemo(() => getWeekIdFromMonday(weekMonday), [weekMonday])
   const days = useMemo(() => getWeekDays(weekMonday), [weekMonday])
+  const { weeklyData } = useCloudSync()
   const { weekData, setWeekGoal, setMemo, setDayNote, setDayTask, setSlotFilled, moveDayTask } =
     useWeeklyStorage(weekId)
+  const { routines, setRoutines } = useTimetableRoutines()
+
+  const displayFilledSlots = useMemo(() => {
+    const routineSlots = computeRoutineSlots(days, routines)
+    return mergeFilledSlots(weekData.filledSlots, routineSlots)
+  }, [days, routines, weekData.filledSlots])
 
   const { year: goalYear, month: goalMonth } = useMemo(
     () => getDominantMonthAndYear(days),
@@ -1551,6 +1595,11 @@ export default function WeeklyView({
   )
 
   const weekLabel = useMemo(() => formatWeekOfMonthLabel(days), [days])
+
+  const checklistDateKeys = useMemo(
+    () => buildChecklistDateKeys(goalYear, goalMonth, weeklyData, toDateKey),
+    [goalYear, goalMonth, weeklyData],
+  )
 
   const handleMonthGoalUpdate = useCallback(
     (goalId, updates) => {
@@ -1573,6 +1622,7 @@ export default function WeeklyView({
   const [postponeMenu, setPostponeMenu] = useState(null)
   const [touchDrag, setTouchDrag] = useState(null)
   const [dropHighlightDay, setDropHighlightDay] = useState(null)
+  const [routinePanelOpen, setRoutinePanelOpen] = useState(false)
   const touchDragMetaRef = useRef(null)
 
   const { startPaint } = useSlotPainter(setSlotFilled, {
@@ -1661,6 +1711,12 @@ export default function WeeklyView({
   const toggleMobileTimetable = useCallback(() => {
     setMobileTimetableExpanded((open) => !open)
   }, [])
+  const openRoutinePanel = useCallback(() => {
+    setRoutinePanelOpen(true)
+  }, [])
+  const closeRoutinePanel = useCallback(() => {
+    setRoutinePanelOpen(false)
+  }, [])
 
   return (
     <div className="flex h-full flex-col bg-planner-cream">
@@ -1718,12 +1774,15 @@ export default function WeeklyView({
         >
           <WeeklySidebarContent
             weekLabel={weekLabel}
+            goalYear={goalYear}
             goalMonth={goalMonth}
             syncedMonthGoals={syncedMonthGoals}
             weekGoals={weekData.weekGoals}
             handleMonthGoalUpdate={handleMonthGoalUpdate}
             handleWeekGoalUpdate={handleWeekGoalUpdate}
             days={days}
+            today={today}
+            checklistDateKeys={checklistDateKeys}
             memo={weekData.memo}
             setMemo={setMemo}
             onOpenHabit={handleOpenHabit}
@@ -1740,12 +1799,15 @@ export default function WeeklyView({
             <WeeklySidebarContent
               compact
               weekLabel={weekLabel}
+              goalYear={goalYear}
               goalMonth={goalMonth}
               syncedMonthGoals={syncedMonthGoals}
               weekGoals={weekData.weekGoals}
               handleMonthGoalUpdate={handleMonthGoalUpdate}
               handleWeekGoalUpdate={handleWeekGoalUpdate}
               days={days}
+              today={today}
+              checklistDateKeys={checklistDateKeys}
               memo={weekData.memo}
               setMemo={setMemo}
               onOpenHabit={handleOpenHabit}
@@ -1765,6 +1827,7 @@ export default function WeeklyView({
                 days={days}
                 today={today}
                 weekData={weekData}
+                filledSlots={displayFilledSlots}
                 setDayTask={setDayTask}
                 setDayNote={setDayNote}
                 moveDayTask={moveDayTask}
@@ -1774,12 +1837,14 @@ export default function WeeklyView({
                 onPaintColorChange={setPaintColorId}
                 locked={timetableLocked}
                 onToggleLock={() => setTimetableLocked((prev) => !prev)}
+                onOpenRoutines={openRoutinePanel}
               />
             ) : (
               <MobileWeekScroller
                 days={days}
                 today={today}
                 weekData={weekData}
+                filledSlots={displayFilledSlots}
                 setDayTask={setDayTask}
                 setDayNote={setDayNote}
                 moveDayTask={moveDayTask}
@@ -1790,6 +1855,7 @@ export default function WeeklyView({
                 onPaintColorChange={setPaintColorId}
                 locked={timetableLocked}
                 onToggleLock={() => setTimetableLocked((prev) => !prev)}
+                onOpenRoutines={openRoutinePanel}
                 dualColumn={!mobileSidebarOpen}
                 dropHighlightDay={dropHighlightDay}
                 timetableExpanded={mobileTimetableExpanded}
@@ -1819,6 +1885,14 @@ export default function WeeklyView({
         >
           다른 요일로 이동
         </div>
+      )}
+
+      {routinePanelOpen && (
+        <TimetableRoutinePanel
+          routines={routines}
+          onChange={setRoutines}
+          onClose={closeRoutinePanel}
+        />
       )}
     </div>
   )

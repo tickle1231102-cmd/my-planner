@@ -23,6 +23,7 @@ export default {
           'year-gold': '#E8D5A8',
           sun: '#EDD060',
           peach: '#F5A882',
+          slate: '#5A5652',
         },
       },
       fontFamily: {
