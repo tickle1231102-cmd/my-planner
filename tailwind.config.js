@@ -23,7 +23,6 @@ export default {
           'year-gold': '#E8D5A8',
           sun: '#EDD060',
           peach: '#F5A882',
-          'deep-terracotta': '#A0522D',
           slate: '#5A5652',
         },
       },
