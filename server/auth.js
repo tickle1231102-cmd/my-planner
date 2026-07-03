@@ -1,6 +1,6 @@
 import { getAdminClient } from './supabaseAdmin.js'
 import { isValidUserKey, normalizeUserKey } from './cloudData.js'
-import { AUTH_EMAIL_SUFFIX, LEGACY_AUTH_EMAIL_SUFFIX, userKeyToAuthEmail } from '../src/lib/authEmail.js'
+import { AUTH_EMAIL_SUFFIX, LEGACY_AUTH_EMAIL_SUFFIX, userKeyToAuthEmail, userKeyToLegacyAuthEmail } from '../src/lib/authEmail.js'
 import { getSupabaseEnvIssue } from './supabaseEnv.js'
 import { createClient } from '@supabase/supabase-js'
 
@@ -278,6 +278,163 @@ function getAnonClient() {
   return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
   })
+}
+
+export async function handleDeleteAccount(authHeader) {
+  if (!authHeader?.startsWith('Bearer ')) {
+    return { status: 401, body: { error: 'unauthorized' } }
+  }
+
+  const token = authHeader.slice(7)
+
+  try {
+    const supabase = getAnonClient()
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser(token)
+
+    if (error || !user?.id) {
+      return { status: 401, body: { error: 'unauthorized' } }
+    }
+
+    const admin = getAdminClient()
+    const { data: profile, error: profileError } = await admin
+      .from('profiles')
+      .select('user_key')
+      .eq('auth_user_id', user.id)
+      .maybeSingle()
+
+    if (profileError) throw profileError
+
+    if (profile?.user_key) {
+      const { error: dataError } = await admin
+        .from('app_data')
+        .delete()
+        .eq('user_key', profile.user_key)
+      if (dataError) throw dataError
+
+      const { error: profileDeleteError } = await admin
+        .from('profiles')
+        .delete()
+        .eq('user_key', profile.user_key)
+      if (profileDeleteError) throw profileDeleteError
+    }
+
+    const { error: deleteUserError } = await admin.auth.admin.deleteUser(user.id)
+    if (deleteUserError) throw deleteUserError
+
+    return { status: 200, body: { ok: true } }
+  } catch (error) {
+    const message = formatServerError(error)
+    return { status: 500, body: { error: message } }
+  }
+}
+
+async function findAuthUserForUserKey(admin, userKey) {
+  const email = userKeyToAuthEmail(userKey)
+  let user = await findAuthUserByEmail(admin, email)
+  if (user) return user
+
+  return findAuthUserByEmail(admin, userKeyToLegacyAuthEmail(userKey))
+}
+
+export async function handleLookupId(body = {}) {
+  const nickname = typeof body.nickname === 'string' ? body.nickname.trim() : ''
+
+  if (!nickname) {
+    return { status: 400, body: { error: 'nickname required' } }
+  }
+
+  const envIssue = getSupabaseEnvIssue()
+  if (envIssue) {
+    return { status: 500, body: { error: envIssue } }
+  }
+
+  let admin
+  try {
+    admin = getAdminClient()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'server misconfigured'
+    return { status: 500, body: { error: message } }
+  }
+
+  try {
+    const { data, error } = await admin
+      .from('profiles')
+      .select('user_key, nickname')
+      .not('auth_user_id', 'is', null)
+      .ilike('nickname', nickname)
+
+    if (error) throw error
+
+    if (!data?.length) {
+      return { status: 404, body: { error: 'not found' } }
+    }
+
+    if (data.length > 1) {
+      return { status: 409, body: { error: 'ambiguous' } }
+    }
+
+    return { status: 200, body: { userKey: data[0].user_key } }
+  } catch (error) {
+    const message = formatServerError(error)
+    return { status: 500, body: { error: message } }
+  }
+}
+
+export async function handleResetPassword(body = {}) {
+  const userKey = normalizeUserKey(body.userKey)
+  const password = body.password
+
+  if (!isValidUserKey(userKey)) {
+    return { status: 400, body: { error: 'invalid userKey' } }
+  }
+
+  if (!isValidPassword(password)) {
+    return { status: 400, body: { error: 'password too short' } }
+  }
+
+  const envIssue = getSupabaseEnvIssue()
+  if (envIssue) {
+    return { status: 500, body: { error: envIssue } }
+  }
+
+  let admin
+  try {
+    admin = getAdminClient()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'server misconfigured'
+    return { status: 500, body: { error: message } }
+  }
+
+  try {
+    const status = await getUserKeyAuthStatus(admin, userKey)
+
+    if (status === 'new') {
+      return { status: 404, body: { error: 'not found' } }
+    }
+
+    if (status === 'legacy') {
+      return { status: 409, body: { error: 'legacy account' } }
+    }
+
+    const authUser = await findAuthUserForUserKey(admin, userKey)
+    if (!authUser?.id) {
+      return { status: 404, body: { error: 'not found' } }
+    }
+
+    const { error: updateError } = await admin.auth.admin.updateUserById(authUser.id, {
+      password,
+    })
+
+    if (updateError) throw updateError
+
+    return { status: 200, body: { ok: true } }
+  } catch (error) {
+    const message = formatServerError(error)
+    return { status: 500, body: { error: message } }
+  }
 }
 
 export async function handleMigrateEmail(authHeader) {

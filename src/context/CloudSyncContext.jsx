@@ -12,7 +12,9 @@ import {
   registerWithUserKey,
   signInWithUserKey,
   signOutAccount,
+  deleteAccountRemotely,
 } from '../lib/authAccount.js'
+import { clearAllLocalPlannerData } from '../lib/clearLocalData.js'
 import { fetchAppData, isSupabaseConfigured, persistAppData } from '../lib/cloudApi.js'
 import {
   clearHabitData,
@@ -22,6 +24,7 @@ import {
   saveHabitData,
 } from '../lib/habitStorage.js'
 import {
+  createDefaultMandalaData,
   hasLocalMandalaData,
   isMandalaDataEmpty,
   loadMandalaData,
@@ -300,6 +303,28 @@ export function CloudSyncProvider({ children }) {
     setMonthlyData(loadMonthlyData())
   }, [cloudEnabled, localOnly])
 
+  const deleteAccount = useCallback(async () => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    pendingSaveRef.current = {}
+
+    if (cloudEnabled && !localOnly) {
+      await deleteAccountRemotely()
+      await signOutAccount()
+    }
+
+    clearAllLocalPlannerData()
+    setUserKey(null)
+    setNickname('')
+    setReady(false)
+    setLocalOnly(false)
+    setAnnualData(withDefaultAnnual({}))
+    setWeeklyData({})
+    setHabitData({})
+    setMandalaData(createDefaultMandalaData())
+    setMonthlyData({})
+    setError('')
+  }, [cloudEnabled, localOnly])
+
   useEffect(() => {
     let cancelled = false
 
@@ -423,6 +448,7 @@ export function CloudSyncProvider({ children }) {
       signIn,
       register,
       logout,
+      deleteAccount,
       useLocalMode,
       updateAnnual,
       updateWeekly,
@@ -447,6 +473,7 @@ export function CloudSyncProvider({ children }) {
       signIn,
       register,
       logout,
+      deleteAccount,
       useLocalMode,
       updateAnnual,
       updateWeekly,

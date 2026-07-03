@@ -3,7 +3,9 @@ import {
   handleAuthEnvCheck,
   handleAuthRegister,
   handleAuthStatus,
+  handleLookupId,
   handleMigrateEmail,
+  handleResetPassword,
 } from './server/auth.js'
 import { getSupabaseEnvIssue } from './server/supabaseEnv.js'
 import { handleDataRequest } from './server/cloudData.js'
@@ -78,6 +80,20 @@ export function cloudApiDevPlugin() {
           if (req.url?.startsWith('/api/auth/register') && req.method === 'POST') {
             const body = await readBody(req)
             const result = await handleAuthRegister(body)
+            sendJson(res, result.status, result.body)
+            return
+          }
+
+          if (req.url?.startsWith('/api/auth/lookup-id') && req.method === 'POST') {
+            const body = await readBody(req)
+            const result = await handleLookupId(body)
+            sendJson(res, result.status, result.body)
+            return
+          }
+
+          if (req.url?.startsWith('/api/auth/reset-password') && req.method === 'POST') {
+            const body = await readBody(req)
+            const result = await handleResetPassword(body)
             sendJson(res, result.status, result.body)
             return
           }

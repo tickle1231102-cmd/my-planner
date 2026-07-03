@@ -8,6 +8,7 @@ import { AppNavMenu } from './components/AppNavMenu.jsx'
 import { CalendarIcon } from './components/CalendarIcon.jsx'
 import { PlannerQuickNav } from './components/PlannerQuickNav.jsx'
 import WeeklyHabitStrip, { MOBILE_RAIL_WIDTH_CLASS } from './components/WeeklyHabitStrip.jsx'
+import { AccountButton } from './components/AccountButton.jsx'
 import TimetableRoutinePanel from './components/TimetableRoutinePanel.jsx'
 import { TimetableRoutineIcon } from './components/TimetableRoutineIcon.jsx'
 import WeeklySidebarMonthCalendar from './components/WeeklySidebarMonthCalendar.jsx'
@@ -1479,7 +1480,7 @@ function WeeklySidebarContent({
         </p>
         <MonthGoalChecklist
           goals={weekGoals}
-          placeholder="주간 목표"
+          placeholder=""
           compact={compact}
           onUpdateGoal={handleWeekGoalUpdate}
         />
@@ -1627,6 +1628,7 @@ export default function WeeklyView({
   onQuickNavYearPlanner,
   onQuickNavMonthly,
   onQuickNavWeekly,
+  onOpenAccount,
 }) {
   const weekId = useMemo(() => getWeekIdFromMonday(weekMonday), [weekMonday])
   const days = useMemo(() => getWeekDays(weekMonday), [weekMonday])
@@ -1819,8 +1821,9 @@ export default function WeeklyView({
             ›
           </button>
         </div>
-        <div className="w-8 shrink-0 lg:hidden" />
-        <div className="hidden w-[120px] shrink-0 lg:block" />
+        <div className="flex shrink-0 items-center justify-end lg:w-[120px]">
+          {onOpenAccount && <AccountButton onClick={onOpenAccount} />}
+        </div>
       </div>
 
       <div className="flex min-h-0 flex-1 overflow-hidden lg:flex-row">

@@ -4,6 +4,7 @@ import {
   userKeyToAuthEmailCandidates,
 } from './authEmail.js'
 import { isValidUserKey, normalizeUserKey } from './userIdentity.js'
+import { SUPPORT_EMAIL } from './supportContact.js'
 
 export const MIN_PASSWORD_LENGTH = 8
 
@@ -253,6 +254,86 @@ export async function linkLegacyUserKey(userKey, password, nickname = '') {
 export async function signOutAccount() {
   const supabase = getClient()
   await supabase.auth.signOut()
+}
+
+export async function lookupUserKeyByNickname(nickname) {
+  const trimmed = nickname?.trim()
+  if (!trimmed) {
+    throw new Error('닉네임을 입력해 주세요')
+  }
+
+  const response = await fetch('/api/auth/lookup-id', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nickname: trimmed }),
+  })
+
+  const body = await response.json().catch(() => ({}))
+
+  if (response.status === 404) {
+    throw new Error('일치하는 계정을 찾지 못했습니다')
+  }
+  if (response.status === 409 && body.error === 'ambiguous') {
+    throw new Error(
+      `같은 닉네임의 계정이 여러 개입니다. ${SUPPORT_EMAIL} 으로 문의해 주세요.`,
+    )
+  }
+  if (!response.ok) {
+    throw new Error(body.error || 'ID 찾기에 실패했습니다')
+  }
+
+  return body.userKey
+}
+
+export async function resetPasswordForUserKey(userKey, password) {
+  const key = normalizeUserKey(userKey)
+  if (!isValidUserKey(key)) {
+    throw new Error('고유 ID 형식이 올바르지 않습니다')
+  }
+  if (!isValidPassword(password)) {
+    throw new Error(getPasswordHint())
+  }
+
+  const response = await fetch('/api/auth/reset-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userKey: key, password }),
+  })
+
+  const body = await response.json().catch(() => ({}))
+
+  if (response.status === 404) {
+    throw new Error('등록되지 않은 ID입니다')
+  }
+  if (response.status === 409 && body.error === 'legacy account') {
+    throw new Error('비밀번호 설정이 완료되지 않은 계정입니다. 회원가입 절차를 진행해 주세요.')
+  }
+  if (!response.ok) {
+    throw new Error(body.error || '비밀번호 재설정에 실패했습니다')
+  }
+}
+
+export async function deleteAccountRemotely() {
+  const supabase = getClient()
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  if (!session?.access_token) {
+    throw new Error('로그인 세션이 없습니다')
+  }
+
+  const response = await fetch('/api/auth/delete-account', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+    },
+  })
+
+  const body = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(body.error || '회원 탈퇴에 실패했습니다')
+  }
 }
 
 export async function getAuthenticatedProfile() {

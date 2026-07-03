@@ -13,6 +13,8 @@ import HabitTracker from './HabitTracker.jsx'
 import MandalartView from './MandalartView.jsx'
 import UserKeyGate from './components/UserKeyGate.jsx'
 import SupabaseSetup from './components/SupabaseSetup.jsx'
+import AccountSettingsView from './components/AccountSettingsView.jsx'
+import { AccountButton } from './components/AccountButton.jsx'
 import { CalendarIcon } from './components/CalendarIcon.jsx'
 import { PlannerQuickNav } from './components/PlannerQuickNav.jsx'
 import { AppNavMenu } from './components/AppNavMenu.jsx'
@@ -1001,6 +1003,7 @@ function App() {
     signIn,
     register,
     logout,
+    deleteAccount,
     syncing,
     error,
     nickname,
@@ -1035,6 +1038,7 @@ function App() {
   return (
     <PlannerApp
       logout={logout}
+      deleteAccount={deleteAccount}
       syncing={syncing && !localOnly}
       userKey={userKey}
       nickname={localOnly ? '로컬 저장' : nickname || userKey}
@@ -1043,8 +1047,9 @@ function App() {
   )
 }
 
-function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
+function PlannerApp({ logout, deleteAccount, syncing, userKey, nickname, localOnly }) {
   const routeInit = useMemo(() => parseAppRoute(), [])
+  const accountReturnViewRef = useRef(routeInit.view === 'account' ? 'annual' : routeInit.view)
 
   const today = useMemo(() => {
     const d = new Date()
@@ -1173,6 +1178,11 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
 
   const navigateToAppView = useCallback((target) => {
     setColorMenu(null)
+    if (target === 'account') {
+      accountReturnViewRef.current = view
+      setView('account')
+      return
+    }
     if (target === 'yearly') {
       setSelectedWeekMonday(null)
       setView('annual')
@@ -1203,6 +1213,35 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
     }
     setView(target)
   }, [today, year, view, selectedWeekMonday])
+
+  const openAccount = useCallback(() => {
+    navigateToAppView('account')
+  }, [navigateToAppView])
+
+  const closeAccount = useCallback(() => {
+    const returnView = accountReturnViewRef.current
+    if (returnView === 'weekly') {
+      const monday =
+        selectedWeekMonday || getMondayOfWeek(today)
+      const weekYear = monday.getFullYear()
+      if (AVAILABLE_YEARS.includes(weekYear) && weekYear !== year) {
+        setYear(weekYear)
+      }
+      setSelectedWeekMonday(monday)
+      setView('weekly')
+      return
+    }
+    if (returnView === 'monthly') {
+      setView('monthly')
+      return
+    }
+    if (returnView === 'habit' || returnView === 'mandala' || returnView === 'yearOverview') {
+      setView(returnView)
+      return
+    }
+    setSelectedWeekMonday(null)
+    setView('annual')
+  }, [selectedWeekMonday, today, year])
 
   const changeYear = useCallback((nextYear) => {
     hasScrolledRef.current = false
@@ -1307,6 +1346,22 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
     document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' })
   }, [year, view, today])
 
+  if (view === 'account') {
+    return (
+      <div className="flex h-svh flex-col">
+        <AccountSettingsView
+          userKey={userKey}
+          nickname={nickname}
+          localOnly={localOnly}
+          syncing={syncing}
+          onBack={closeAccount}
+          onLogout={logout}
+          onDeleteAccount={deleteAccount}
+        />
+      </div>
+    )
+  }
+
   if (view === 'weekly' && selectedWeekMonday) {
     return (
       <div className="flex h-svh flex-col">
@@ -1322,6 +1377,7 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
           onQuickNavYearPlanner={goToYearPlanner}
           onQuickNavMonthly={() => navigateToAppView('monthly')}
           onQuickNavWeekly={() => navigateToAppView('weekly')}
+          onOpenAccount={openAccount}
         />
       </div>
     )
@@ -1345,6 +1401,7 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
           onQuickNavMonthly={() => navigateToAppView('monthly')}
           onQuickNavWeekly={() => navigateToAppView('weekly')}
           activeNavItem={activeNavItem}
+          onOpenAccount={openAccount}
         />
       </div>
     )
@@ -1410,13 +1467,7 @@ function PlannerApp({ logout, syncing, userKey, nickname, localOnly }) {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={logout}
-              className="rounded-full border border-planner-sand px-3 py-1.5 text-[11px] font-medium text-planner-ink-muted transition hover:bg-white sm:text-xs"
-            >
-              로그아웃
-            </button>
+            <AccountButton onClick={openAccount} />
             {showTodayButton && isPlannerView && (
               <button
                 type="button"

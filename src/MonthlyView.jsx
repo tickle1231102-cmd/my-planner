@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { AppNavMenu } from './components/AppNavMenu.jsx'
 import { CalendarIcon } from './components/CalendarIcon.jsx'
 import { PlannerQuickNav } from './components/PlannerQuickNav.jsx'
+import { AccountButton } from './components/AccountButton.jsx'
 import MonthGoalChecklist from './components/MonthGoalChecklist.jsx'
 import { useCloudSync } from './context/CloudSyncContext.jsx'
 import { padMonthGoals } from './lib/goalLists.js'
@@ -309,6 +310,7 @@ export default function MonthlyView({
   onQuickNavMonthly,
   onQuickNavWeekly,
   activeNavItem,
+  onOpenAccount,
 }) {
   const notesRef = useRef(null)
   const [mobileNotesOpen, setMobileNotesOpen] = useState(false)
@@ -376,9 +378,12 @@ export default function MonthlyView({
             onWeekly={onQuickNavWeekly}
           />
         </div>
-        <p className="hidden text-xs text-planner-ink-muted sm:block">
-          {MONTH_DISPLAY_NAMES[month]} {year}
-        </p>
+        <div className="flex shrink-0 items-center gap-2">
+          <p className="hidden text-xs text-planner-ink-muted sm:block">
+            {MONTH_DISPLAY_NAMES[month]} {year}
+          </p>
+          {onOpenAccount && <AccountButton onClick={onOpenAccount} />}
+        </div>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
