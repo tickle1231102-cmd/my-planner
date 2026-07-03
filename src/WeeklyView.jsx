@@ -1211,24 +1211,35 @@ function MobileDayColumn({
   onToggleLock,
   onOpenRoutines,
   dualColumn,
+  columnWidth,
   dropHighlight,
   timetableExpanded,
   onToggleTimetable,
 }) {
   const date = days[dayIdx]
   const isToday = isSameDay(date, today)
+  const columnStyle =
+    columnWidth > 0
+      ? {
+          width: columnWidth,
+          minWidth: columnWidth,
+          maxWidth: columnWidth,
+          flexBasis: columnWidth,
+        }
+      : undefined
 
   return (
     <div
       className={[
-        'flex h-full shrink-0 snap-start flex-col',
-        dualColumn ? 'min-w-[50%]' : 'min-w-full',
+        'flex h-full shrink-0 snap-start flex-col overflow-hidden',
+        columnWidth > 0 ? '' : dualColumn ? 'min-w-[50%] max-w-[50%]' : 'min-w-full',
       ].join(' ')}
+      style={columnStyle}
       data-day-column={dayIdx}
     >
       <div
         className={[
-          'shrink-0 border-b border-planner-sage/30 py-1 text-center text-[13px] font-semibold tracking-wide',
+          'shrink-0 truncate border-b border-planner-sage/30 px-1 py-1 text-center text-[13px] font-semibold tracking-wide',
           isToday ? 'bg-planner-today text-planner-ink' : 'bg-planner-sage text-white',
         ].join(' ')}
       >
@@ -1281,6 +1292,7 @@ function MobileDayColumn({
 }
 
 function MobileWeekScroller({
+  weekId,
   days,
   today,
   weekData,
@@ -1302,35 +1314,70 @@ function MobileWeekScroller({
   onToggleTimetable,
 }) {
   const scrollRef = useRef(null)
+  const [columnWidth, setColumnWidth] = useState(0)
+  const initialScrollDoneRef = useRef(false)
+  const prevColumnWidthRef = useRef(0)
 
   useEffect(() => {
-    const todayIdx = days.findIndex((day) => isSameDay(day, today))
-    if (todayIdx < 0 || !scrollRef.current) return
+    initialScrollDoneRef.current = false
+    prevColumnWidthRef.current = 0
+  }, [weekId])
 
-    const scrollToToday = () => {
-      const el = scrollRef.current
-      if (!el) return
-      const column = el.querySelector(`[data-day-column="${todayIdx}"]`)
-      if (column) {
-        column.scrollIntoView({ inline: 'start', block: 'nearest', behavior: 'auto' })
-        return
-      }
-      const columnWidth = dualColumn ? el.clientWidth / 2 : el.clientWidth
-      el.scrollTo({ left: todayIdx * columnWidth, behavior: 'auto' })
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+
+    const updateColumnWidth = () => {
+      const viewportWidth = el.clientWidth
+      if (!viewportWidth) return
+      setColumnWidth(dualColumn ? viewportWidth / 2 : viewportWidth)
     }
 
-    scrollToToday()
-    const frame = window.requestAnimationFrame(scrollToToday)
-    return () => window.cancelAnimationFrame(frame)
-  }, [days, today, dualColumn])
+    updateColumnWidth()
+    const observer = new ResizeObserver(updateColumnWidth)
+    observer.observe(el)
+    window.addEventListener('resize', updateColumnWidth)
+
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', updateColumnWidth)
+    }
+  }, [dualColumn])
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el || !columnWidth) return
+
+    if (!initialScrollDoneRef.current) {
+      const todayIdx = days.findIndex((day) => isSameDay(day, today))
+      if (todayIdx < 0) return
+
+      const scrollToToday = () => {
+        el.scrollTo({ left: todayIdx * columnWidth, behavior: 'auto' })
+        initialScrollDoneRef.current = true
+        prevColumnWidthRef.current = columnWidth
+      }
+
+      scrollToToday()
+      const frame = window.requestAnimationFrame(scrollToToday)
+      return () => window.cancelAnimationFrame(frame)
+    }
+
+    const prevWidth = prevColumnWidthRef.current
+    if (prevWidth > 0 && prevWidth !== columnWidth) {
+      const dayIndex = Math.min(
+        days.length - 1,
+        Math.max(0, Math.round(el.scrollLeft / prevWidth)),
+      )
+      el.scrollTo({ left: dayIndex * columnWidth, behavior: 'auto' })
+    }
+    prevColumnWidthRef.current = columnWidth
+  }, [weekId, days, today, columnWidth])
 
   return (
     <div
       ref={scrollRef}
-      className={[
-        'scrollbar-thin flex h-full overflow-x-auto overflow-y-hidden',
-        dualColumn ? 'snap-x snap-proximity' : 'snap-x snap-mandatory',
-      ].join(' ')}
+      className="scrollbar-thin flex h-full snap-x snap-mandatory overflow-x-auto overflow-y-hidden"
     >
       {days.map((_, dayIdx) => (
         <MobileDayColumn
@@ -1352,6 +1399,7 @@ function MobileWeekScroller({
           onToggleLock={onToggleLock}
           onOpenRoutines={onOpenRoutines}
           dualColumn={dualColumn}
+          columnWidth={columnWidth}
           dropHighlight={dropHighlightDay === dayIdx}
           timetableExpanded={timetableExpanded}
           onToggleTimetable={onToggleTimetable}
@@ -1848,6 +1896,7 @@ export default function WeeklyView({
               />
             ) : (
               <MobileWeekScroller
+                weekId={weekId}
                 days={days}
                 today={today}
                 weekData={weekData}
