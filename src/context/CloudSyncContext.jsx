@@ -37,6 +37,14 @@ import {
   saveMonthlyData,
 } from '../lib/monthlyStorage.js'
 import {
+  clearMemoryData,
+  hasLocalMemoryData,
+  isMemoryDataEmpty,
+  loadMemoryData,
+  saveMemoryData,
+  withDefaultMemory,
+} from '../lib/memoryStorage.js'
+import {
   DEFAULT_COLUMNS,
   hasLocalData,
   isCloudEmpty,
@@ -85,6 +93,7 @@ export function CloudSyncProvider({ children }) {
   const [habitData, setHabitData] = useState(() => loadHabitData())
   const [mandalaData, setMandalaData] = useState(() => loadMandalaData())
   const [monthlyData, setMonthlyData] = useState(() => loadMonthlyData())
+  const [memoryData, setMemoryData] = useState(() => loadMemoryData())
 
   const saveTimerRef = useRef(null)
   const pendingSaveRef = useRef({})
@@ -98,6 +107,7 @@ export function CloudSyncProvider({ children }) {
     setHabitData(loadHabitData())
     setMandalaData(loadMandalaData())
     setMonthlyData(loadMonthlyData())
+    setMemoryData(loadMemoryData())
     setReady(true)
     setError('')
   }, [])
@@ -115,6 +125,7 @@ export function CloudSyncProvider({ children }) {
       const habit_data = isNewAccount ? {} : loadHabitData()
       const mandala_data = loadMandalaData()
       const monthly_data = loadMonthlyData()
+      const memory_data = loadMemoryData()
       cloud = await persistAppData({
         nickname: name || undefined,
         annual_data,
@@ -122,6 +133,7 @@ export function CloudSyncProvider({ children }) {
         habit_data,
         mandala_data,
         monthly_data,
+        memory_data,
       })
     } else if (
       !isNewAccount &&
@@ -138,6 +150,10 @@ export function CloudSyncProvider({ children }) {
     } else if (isMonthlyDataEmpty(cloud.monthly_data) && hasLocalMonthlyData()) {
       cloud = await persistAppData({
         monthly_data: loadMonthlyData(),
+      })
+    } else if (isMemoryDataEmpty(cloud.memory_data) && hasLocalMemoryData()) {
+      cloud = await persistAppData({
+        memory_data: loadMemoryData(),
       })
     } else if (name) {
       cloud = await persistAppData({ nickname: name })
@@ -158,11 +174,13 @@ export function CloudSyncProvider({ children }) {
     setHabitData(cloud.habit_data || {})
     setMandalaData(cloud.mandala_data || loadMandalaData())
     setMonthlyData(cloud.monthly_data || loadMonthlyData())
+    setMemoryData(withDefaultMemory(cloud.memory_data))
     saveAnnualToLocal(cloud.annual_data)
     saveWeeklyToLocal(cloud.weekly_data || {})
     saveHabitData(cloud.habit_data || {})
     saveMandalaData(cloud.mandala_data || loadMandalaData())
     saveMonthlyData(cloud.monthly_data || loadMonthlyData())
+    saveMemoryData(withDefaultMemory(cloud.memory_data))
     setError('')
   }, [])
 
@@ -197,6 +215,11 @@ export function CloudSyncProvider({ children }) {
         setMonthlyData(data.monthly_data)
         saveMonthlyData(data.monthly_data)
       }
+      if (data?.memory_data) {
+        const normalized = withDefaultMemory(data.memory_data)
+        setMemoryData(normalized)
+        saveMemoryData(normalized)
+      }
       setError('')
     } catch (err) {
       setError(err instanceof Error ? err.message : '동기화 실패')
@@ -216,6 +239,7 @@ export function CloudSyncProvider({ children }) {
       if (patch.habit_data) saveHabitData(patch.habit_data)
       if (patch.mandala_data) saveMandalaData(patch.mandala_data)
       if (patch.monthly_data) saveMonthlyData(patch.monthly_data)
+      if (patch.memory_data) saveMemoryData(patch.memory_data)
 
       if (!cloudEnabled || localOnly) return
 
@@ -301,6 +325,7 @@ export function CloudSyncProvider({ children }) {
     setHabitData(wasCloudSession ? {} : loadHabitData())
     setMandalaData(loadMandalaData())
     setMonthlyData(loadMonthlyData())
+    setMemoryData(loadMemoryData())
   }, [cloudEnabled, localOnly])
 
   const deleteAccount = useCallback(async () => {
@@ -322,6 +347,7 @@ export function CloudSyncProvider({ children }) {
     setHabitData({})
     setMandalaData(createDefaultMandalaData())
     setMonthlyData({})
+    setMemoryData({ memos: [] })
     setError('')
   }, [cloudEnabled, localOnly])
 
@@ -430,6 +456,20 @@ export function CloudSyncProvider({ children }) {
     [scheduleSave],
   )
 
+  const updateMemory = useCallback(
+    (updater) => {
+      setMemoryData((prev) => {
+        const safePrev = withDefaultMemory(prev)
+        const next =
+          typeof updater === 'function' ? updater(safePrev) : withDefaultMemory(updater)
+        const normalized = withDefaultMemory(next)
+        scheduleSave({ memory_data: normalized })
+        return normalized
+      })
+    },
+    [scheduleSave],
+  )
+
   const value = useMemo(
     () => ({
       userKey,
@@ -445,6 +485,7 @@ export function CloudSyncProvider({ children }) {
       habitData,
       mandalaData,
       monthlyData,
+      memoryData,
       signIn,
       register,
       logout,
@@ -455,6 +496,7 @@ export function CloudSyncProvider({ children }) {
       updateHabitData,
       updateMandala,
       updateMonthly,
+      updateMemory,
     }),
     [
       userKey,
@@ -470,6 +512,7 @@ export function CloudSyncProvider({ children }) {
       habitData,
       mandalaData,
       monthlyData,
+      memoryData,
       signIn,
       register,
       logout,
@@ -480,6 +523,7 @@ export function CloudSyncProvider({ children }) {
       updateHabitData,
       updateMandala,
       updateMonthly,
+      updateMemory,
     ],
   )
 

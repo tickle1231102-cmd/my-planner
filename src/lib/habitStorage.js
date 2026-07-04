@@ -188,6 +188,86 @@ export function computeTotals(habits, daysInMonth) {
   return { completed, total }
 }
 
+function getActiveHabits(habits) {
+  const activeHabits = habits.filter((habit) => habit.label.trim())
+  return activeHabits.length ? activeHabits : habits
+}
+
+export function inViewDaysInChunk(chunk) {
+  return chunk.slots.filter((slot) => slot.inViewMonth).length
+}
+
+export function countHabitInWeek(habit, chunk) {
+  let count = 0
+  for (const slot of chunk.slots) {
+    if (!slot.inViewMonth) continue
+    if (habit.checks[String(slot.day)]) count += 1
+  }
+  return count
+}
+
+export function weekGoalForHabit(habit, chunk, daysInMonth) {
+  const inView = inViewDaysInChunk(chunk)
+  if (inView === 0) return 0
+  return Math.min(inView, Math.max(1, Math.round((habit.goal * inView) / daysInMonth)))
+}
+
+export function isHabitWeekComplete(habit, chunk, daysInMonth) {
+  const goal = weekGoalForHabit(habit, chunk, daysInMonth)
+  if (goal === 0) return false
+  return countHabitInWeek(habit, chunk) >= goal
+}
+
+export function computeWeekDailyCounts(habits, chunk) {
+  const list = getActiveHabits(habits)
+  const habitCount = list.length
+
+  const completed = chunk.slots.map((slot) => {
+    if (!slot.inViewMonth) return null
+    return countDayCompleted(list, slot.day)
+  })
+
+  const incomplete = completed.map((value) =>
+    value === null ? null : Math.max(habitCount - value, 0),
+  )
+
+  return { completed, incomplete, habitCount }
+}
+
+export function computeWeekProgressPercent(habits, chunk) {
+  const list = getActiveHabits(habits)
+  let completed = 0
+  let total = 0
+
+  for (const slot of chunk.slots) {
+    if (!slot.inViewMonth) continue
+    completed += countDayCompleted(list, slot.day)
+    total += list.length
+  }
+
+  return total > 0 ? Math.round((completed / total) * 100) : 0
+}
+
+export function computeWeeklyHabitTotals(habits, weekChunks, daysInMonth) {
+  const list = getActiveHabits(habits).filter((habit) => habit.label.trim())
+  if (!list.length) {
+    return { completed: 0, total: 0 }
+  }
+
+  let completed = 0
+  let total = 0
+
+  for (const chunk of weekChunks) {
+    if (inViewDaysInChunk(chunk) === 0) continue
+    for (const habit of list) {
+      total += 1
+      if (isHabitWeekComplete(habit, chunk, daysInMonth)) completed += 1
+    }
+  }
+
+  return { completed, total }
+}
+
 export function toggleHabitCheck(allData, habitIndex, slot) {
   const current = getMonthData(allData, slot.year, slot.month)
   const habits = [...current.habits]
@@ -206,4 +286,46 @@ export function toggleHabitCheck(allData, habitIndex, slot) {
   }
 
   return setMonthData(allData, slot.year, slot.month, { habits })
+}
+
+export function setHabitWeekChecks(allData, habitIndex, chunk, checked) {
+  let result = allData
+
+  for (const slot of chunk.slots) {
+    if (!slot.inViewMonth) continue
+
+    const current = getMonthData(result, slot.year, slot.month)
+    const habits = [...current.habits]
+    const daysInSlotMonth = getDaysInMonth(slot.year, slot.month)
+
+    while (habits.length <= habitIndex) {
+      habits.push(createHabit(`habit-${habits.length}`, daysInSlotMonth))
+    }
+
+    const habit = habits[habitIndex]
+    const key = String(slot.day)
+
+    if (!!habit.checks[key] === checked) continue
+
+    habits[habitIndex] = {
+      ...habit,
+      checks: { ...habit.checks, [key]: checked },
+    }
+
+    result = setMonthData(result, slot.year, slot.month, { habits })
+  }
+
+  return result
+}
+
+export function toggleHabitWeekComplete(allData, habitIndex, chunk, daysInMonth) {
+  const firstInView = chunk.slots.find((slot) => slot.inViewMonth)
+  if (!firstInView) return allData
+
+  const monthData = getMonthData(allData, firstInView.year, firstInView.month)
+  const habit = monthData.habits[habitIndex]
+  if (!habit) return allData
+
+  const isComplete = isHabitWeekComplete(habit, chunk, daysInMonth)
+  return setHabitWeekChecks(allData, habitIndex, chunk, !isComplete)
 }

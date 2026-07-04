@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { id: 'weekly', label: 'Weekly' },
   { id: 'mandala', label: 'Mandal-Art' },
   { id: 'habit', label: 'Habit Tracker' },
+  { id: 'memory', label: 'My Memory' },
 ]
 
 export function AppNavMenu({ activeItem, onNavigate }) {

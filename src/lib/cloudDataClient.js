@@ -77,6 +77,7 @@ export async function saveAppData(payload = {}) {
   if (payload.habit_data !== undefined) patch.habit_data = payload.habit_data
   if (payload.mandala_data !== undefined) patch.mandala_data = payload.mandala_data
   if (payload.monthly_data !== undefined) patch.monthly_data = payload.monthly_data
+  if (payload.memory_data !== undefined) patch.memory_data = payload.memory_data
 
   try {
     return await upsertAppDataRow(supabase, patch)

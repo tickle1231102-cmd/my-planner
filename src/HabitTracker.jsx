@@ -13,7 +13,9 @@ import {
   setMonthData,
   slotKey,
   toggleHabitCheck,
+  toggleHabitWeekComplete,
 } from './lib/habitStorage.js'
+import WeeklyAchievementBoard from './components/WeeklyAchievementBoard.jsx'
 
 const MONTH_LABELS = [
   '1월', '2월', '3월', '4월', '5월', '6월',
@@ -68,6 +70,13 @@ function useHabitTracker(year, month) {
     [updateHabitData],
   )
 
+  const toggleWeekHabit = useCallback(
+    (habitIndex, chunk) => {
+      updateHabitData((prev) => toggleHabitWeekComplete(prev, habitIndex, chunk, daysInMonth))
+    },
+    [updateHabitData, daysInMonth],
+  )
+
   const isChecked = useCallback(
     (habitIndex, slot) => getHabitCheck(habitData, habitIndex, slot),
     [habitData],
@@ -87,6 +96,7 @@ function useHabitTracker(year, month) {
     habits: monthData.habits,
     updateHabit,
     toggleCheck,
+    toggleWeekHabit,
     isChecked,
     addHabit,
   }
@@ -259,7 +269,7 @@ export default function HabitTracker({ today }) {
   const [year, setYear] = useState(initialYear)
   const [month, setMonth] = useState(today.getMonth())
 
-  const { daysInMonth, habits, updateHabit, toggleCheck, isChecked, addHabit } = useHabitTracker(
+  const { daysInMonth, habits, updateHabit, toggleCheck, toggleWeekHabit, isChecked, addHabit } = useHabitTracker(
     year,
     month,
   )
@@ -485,6 +495,13 @@ export default function HabitTracker({ today }) {
           </button>
         </div>
       </section>
+
+      <WeeklyAchievementBoard
+        weekChunks={weekChunks}
+        habits={habits}
+        daysInMonth={daysInMonth}
+        onToggleWeekHabit={toggleWeekHabit}
+      />
     </div>
   )
 }

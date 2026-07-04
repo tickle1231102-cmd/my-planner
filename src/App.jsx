@@ -10,6 +10,7 @@ import WeeklyView, { getMondayOfWeek } from './WeeklyView.jsx'
 import MonthlyView from './MonthlyView.jsx'
 import YearOverviewCalendar from './YearOverviewCalendar.jsx'
 import HabitTracker from './HabitTracker.jsx'
+import MemoryView from './MemoryView.jsx'
 import MandalartView from './MandalartView.jsx'
 import UserKeyGate from './components/UserKeyGate.jsx'
 import SupabaseSetup from './components/SupabaseSetup.jsx'
@@ -1235,7 +1236,7 @@ function PlannerApp({ logout, deleteAccount, syncing, userKey, nickname, localOn
       setView('monthly')
       return
     }
-    if (returnView === 'habit' || returnView === 'mandala' || returnView === 'yearOverview') {
+    if (returnView === 'habit' || returnView === 'mandala' || returnView === 'memory' || returnView === 'yearOverview') {
       setView(returnView)
       return
     }
@@ -1263,7 +1264,7 @@ function PlannerApp({ logout, deleteAccount, syncing, userKey, nickname, localOn
     if (view === 'yearOverview') {
       setView('annual')
     }
-    if (view === 'mandala' || view === 'habit') {
+    if (view === 'mandala' || view === 'habit' || view === 'memory') {
       setView('annual')
     }
     if (view === 'monthly') {
@@ -1317,13 +1318,17 @@ function PlannerApp({ logout, deleteAccount, syncing, userKey, nickname, localOn
           ? 'mandala'
           : view === 'habit'
             ? 'habit'
-            : 'yearly'
+            : view === 'memory'
+              ? 'memory'
+              : 'yearly'
   const headerTitle =
     view === 'mandala'
       ? 'Mandal-Art'
       : view === 'habit'
         ? 'Habit Tracker'
-        : view === 'yearOverview'
+        : view === 'memory'
+          ? 'My Memory'
+          : view === 'yearOverview'
           ? 'Calendar'
           : 'Yearly'
   const quickNavActiveView =
@@ -1337,7 +1342,9 @@ function PlannerApp({ logout, deleteAccount, syncing, userKey, nickname, localOn
       ? 'Manda(본질의 깨달음) + La(성취) + Art(기술)\n"본질에 집중하여 목적을 달성하게 돕는 만다라트로 목표와 계획을 관리하세요"'
       : view === 'habit'
         ? '한 달 습관을 주차별로 추적하세요'
-        : view === 'yearOverview'
+        : view === 'memory'
+          ? '생각나는 대로 적으면 키워드로 자동 분류됩니다'
+          : view === 'yearOverview'
           ? '12개월 Calendar · 날짜를 누르면 Weekly로 이동합니다'
           : '날짜를 눌러 Weekly로 이동하세요'
 
@@ -1510,6 +1517,8 @@ function PlannerApp({ logout, deleteAccount, syncing, userKey, nickname, localOn
             <MandalartView />
           ) : view === 'habit' ? (
             <HabitTracker today={today} />
+          ) : view === 'memory' ? (
+            <MemoryView />
           ) : (
             <>
           <div className="hidden overflow-hidden rounded-2xl border border-planner-sand bg-white shadow-soft lg:block">

@@ -1,5 +1,5 @@
 const BASE_COLUMNS = ['annual_data', 'weekly_data', 'habit_data']
-const OPTIONAL_COLUMNS = ['mandala_data', 'monthly_data']
+const OPTIONAL_COLUMNS = ['mandala_data', 'monthly_data', 'memory_data']
 const META_COLUMNS = ['updated_at']
 
 export const MANDALA_MIGRATION_HINT =
@@ -7,6 +7,9 @@ export const MANDALA_MIGRATION_HINT =
 
 export const MONTHLY_MIGRATION_HINT =
   'DB에 월간 플래너 컬럼이 없습니다. Supabase SQL Editor에서 supabase/migrations/add_monthly_data.sql 을 실행해 주세요.'
+
+export const MEMORY_MIGRATION_HINT =
+  'DB에 메모리 컬럼이 없습니다. Supabase SQL Editor에서 supabase/migrations/add_memory_data.sql 을 실행해 주세요.'
 
 function buildSelectList(includeOptional = [...OPTIONAL_COLUMNS]) {
   return [...BASE_COLUMNS, ...includeOptional, ...META_COLUMNS].join(', ')
@@ -29,6 +32,7 @@ function getMissingColumn(error) {
 function migrationHintForColumn(column) {
   if (column === 'mandala_data') return MANDALA_MIGRATION_HINT
   if (column === 'monthly_data') return MONTHLY_MIGRATION_HINT
+  if (column === 'memory_data') return MEMORY_MIGRATION_HINT
   return `DB에 ${column} 컬럼이 없습니다.`
 }
 

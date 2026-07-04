@@ -1,4 +1,4 @@
-const VALID_VIEWS = new Set(['annual', 'yearOverview', 'weekly', 'habit', 'mandala', 'monthly', 'account'])
+const VALID_VIEWS = new Set(['annual', 'yearOverview', 'weekly', 'habit', 'mandala', 'monthly', 'memory', 'account'])
 
 export function formatWeekMonday(date) {
   const year = date.getFullYear()
