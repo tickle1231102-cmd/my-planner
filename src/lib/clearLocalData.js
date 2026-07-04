@@ -1,5 +1,5 @@
 import { clearHabitData } from './habitStorage.js'
-import { clearMemoryData } from './memoryStorage.js'
+import { clearAllMemoryData } from './memoryStorage.js'
 import { MANDALA_STORAGE_KEY } from './mandalaStorage.js'
 import { MONTHLY_STORAGE_KEY } from './monthlyStorage.js'
 import {
@@ -14,6 +14,6 @@ export function clearAllLocalPlannerData() {
   clearHabitData()
   localStorage.removeItem(MANDALA_STORAGE_KEY)
   localStorage.removeItem(MONTHLY_STORAGE_KEY)
-  clearMemoryData()
+  clearAllMemoryData()
   clearUserKey()
 }

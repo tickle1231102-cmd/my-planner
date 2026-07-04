@@ -38,6 +38,7 @@ import {
 } from '../lib/monthlyStorage.js'
 import {
   clearMemoryData,
+  createEmptyMemoryData,
   hasLocalMemoryData,
   isMemoryDataEmpty,
   loadMemoryData,
@@ -93,7 +94,7 @@ export function CloudSyncProvider({ children }) {
   const [habitData, setHabitData] = useState(() => loadHabitData())
   const [mandalaData, setMandalaData] = useState(() => loadMandalaData())
   const [monthlyData, setMonthlyData] = useState(() => loadMonthlyData())
-  const [memoryData, setMemoryData] = useState(() => loadMemoryData())
+  const [memoryData, setMemoryData] = useState(() => createEmptyMemoryData())
 
   const saveTimerRef = useRef(null)
   const pendingSaveRef = useRef({})
@@ -107,7 +108,7 @@ export function CloudSyncProvider({ children }) {
     setHabitData(loadHabitData())
     setMandalaData(loadMandalaData())
     setMonthlyData(loadMonthlyData())
-    setMemoryData(loadMemoryData())
+    setMemoryData(loadMemoryData(key))
     setReady(true)
     setError('')
   }, [])
@@ -125,7 +126,7 @@ export function CloudSyncProvider({ children }) {
       const habit_data = isNewAccount ? {} : loadHabitData()
       const mandala_data = loadMandalaData()
       const monthly_data = loadMonthlyData()
-      const memory_data = loadMemoryData()
+      const memory_data = isNewAccount ? createEmptyMemoryData() : loadMemoryData(key)
       cloud = await persistAppData({
         nickname: name || undefined,
         annual_data,
@@ -151,9 +152,9 @@ export function CloudSyncProvider({ children }) {
       cloud = await persistAppData({
         monthly_data: loadMonthlyData(),
       })
-    } else if (isMemoryDataEmpty(cloud.memory_data) && hasLocalMemoryData()) {
+    } else if (isMemoryDataEmpty(cloud.memory_data) && hasLocalMemoryData(key)) {
       cloud = await persistAppData({
-        memory_data: loadMemoryData(),
+        memory_data: loadMemoryData(key),
       })
     } else if (name) {
       cloud = await persistAppData({ nickname: name })
@@ -162,8 +163,9 @@ export function CloudSyncProvider({ children }) {
     const profile = await getAuthenticatedProfile()
 
     if (isNewAccount) {
-      cloud = { ...cloud, habit_data: {} }
+      cloud = { ...cloud, habit_data: {}, memory_data: createEmptyMemoryData() }
       clearHabitData()
+      clearMemoryData(key)
     }
 
     saveUserKey(key)
@@ -180,7 +182,7 @@ export function CloudSyncProvider({ children }) {
     saveHabitData(cloud.habit_data || {})
     saveMandalaData(cloud.mandala_data || loadMandalaData())
     saveMonthlyData(cloud.monthly_data || loadMonthlyData())
-    saveMemoryData(withDefaultMemory(cloud.memory_data))
+    saveMemoryData(withDefaultMemory(cloud.memory_data), key)
     setError('')
   }, [])
 
@@ -218,7 +220,7 @@ export function CloudSyncProvider({ children }) {
       if (data?.memory_data) {
         const normalized = withDefaultMemory(data.memory_data)
         setMemoryData(normalized)
-        saveMemoryData(normalized)
+        saveMemoryData(normalized, userKey)
       }
       setError('')
     } catch (err) {
@@ -239,7 +241,7 @@ export function CloudSyncProvider({ children }) {
       if (patch.habit_data) saveHabitData(patch.habit_data)
       if (patch.mandala_data) saveMandalaData(patch.mandala_data)
       if (patch.monthly_data) saveMonthlyData(patch.monthly_data)
-      if (patch.memory_data) saveMemoryData(patch.memory_data)
+      if (patch.memory_data) saveMemoryData(patch.memory_data, userKey)
 
       if (!cloudEnabled || localOnly) return
 
@@ -309,10 +311,12 @@ export function CloudSyncProvider({ children }) {
     pendingSaveRef.current = {}
 
     const wasCloudSession = cloudEnabled && !localOnly
+    const sessionKey = userKey
 
     if (wasCloudSession) {
       await signOutAccount()
       clearHabitData()
+      if (sessionKey) clearMemoryData(sessionKey)
     }
 
     clearUserKey()
@@ -325,8 +329,8 @@ export function CloudSyncProvider({ children }) {
     setHabitData(wasCloudSession ? {} : loadHabitData())
     setMandalaData(loadMandalaData())
     setMonthlyData(loadMonthlyData())
-    setMemoryData(loadMemoryData())
-  }, [cloudEnabled, localOnly])
+    setMemoryData(createEmptyMemoryData())
+  }, [cloudEnabled, localOnly, userKey])
 
   const deleteAccount = useCallback(async () => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
@@ -347,7 +351,7 @@ export function CloudSyncProvider({ children }) {
     setHabitData({})
     setMandalaData(createDefaultMandalaData())
     setMonthlyData({})
-    setMemoryData({ memos: [] })
+    setMemoryData(createEmptyMemoryData())
     setError('')
   }, [cloudEnabled, localOnly])
 

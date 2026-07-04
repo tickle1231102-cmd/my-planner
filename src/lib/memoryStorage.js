@@ -1,7 +1,14 @@
 import { classifyByKeywords } from './memoryClassify.js'
 import { getEffectiveCategorySlug } from './memoryCategories.js'
+import { getSavedUserKey, normalizeUserKey } from './userIdentity.js'
 
 export const MEMORY_STORAGE_KEY = 'my-planner-memory-v1'
+
+export function memoryStorageKey(userKey) {
+  const key = normalizeUserKey(userKey || getSavedUserKey() || '')
+  if (!key) return MEMORY_STORAGE_KEY
+  return `${MEMORY_STORAGE_KEY}:${key}`
+}
 
 export function createEmptyMemoryData() {
   return { memos: [] }
@@ -28,9 +35,18 @@ export function withDefaultMemory(raw) {
   return normalizeMemoryData(raw)
 }
 
-export function loadMemoryData() {
+/** Remove legacy shared key that leaked memos across accounts on one browser. */
+export function clearLegacyMemoryStorage() {
+  if (typeof window === 'undefined') return
+  localStorage.removeItem(MEMORY_STORAGE_KEY)
+}
+
+export function loadMemoryData(userKey) {
+  clearLegacyMemoryStorage()
+  if (typeof window === 'undefined') return createEmptyMemoryData()
+
   try {
-    const raw = localStorage.getItem(MEMORY_STORAGE_KEY)
+    const raw = localStorage.getItem(memoryStorageKey(userKey))
     if (!raw) return createEmptyMemoryData()
     return normalizeMemoryData(JSON.parse(raw))
   } catch {
@@ -38,19 +54,33 @@ export function loadMemoryData() {
   }
 }
 
-export function saveMemoryData(data) {
+export function saveMemoryData(data, userKey) {
+  if (typeof window === 'undefined') return
   localStorage.setItem(
-    MEMORY_STORAGE_KEY,
+    memoryStorageKey(userKey),
     JSON.stringify(withDefaultMemory(data)),
   )
 }
 
-export function clearMemoryData() {
-  localStorage.removeItem(MEMORY_STORAGE_KEY)
+export function clearMemoryData(userKey) {
+  if (typeof window === 'undefined') return
+  localStorage.removeItem(memoryStorageKey(userKey))
+  clearLegacyMemoryStorage()
 }
 
-export function hasLocalMemoryData() {
-  const data = loadMemoryData()
+export function clearAllMemoryData() {
+  if (typeof window === 'undefined') return
+  clearLegacyMemoryStorage()
+  for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+    const key = localStorage.key(index)
+    if (key?.startsWith(`${MEMORY_STORAGE_KEY}:`)) {
+      localStorage.removeItem(key)
+    }
+  }
+}
+
+export function hasLocalMemoryData(userKey) {
+  const data = loadMemoryData(userKey)
   return data.memos.length > 0
 }
 
