@@ -112,19 +112,19 @@ export function getMemoById(memos, id) {
   return memos.find((memo) => memo.id === id) ?? null
 }
 
-export function createMemoInData(data, content) {
-  const classification = classifyByKeywords(content)
+export function createMemoInData(data, content, classification) {
+  const resolved = classification ?? classifyByKeywords(content)
   const now = new Date().toISOString()
   const existingMemos = withDefaultMemory(data).memos
 
   const memo = {
     id: crypto.randomUUID(),
     content,
-    title: classification.title,
-    categorySlug: classification.slug,
+    title: resolved.title,
+    categorySlug: resolved.slug,
     userCategorySlug: null,
-    confidence: classification.confidence,
-    classificationModel: 'keyword-rules-v1',
+    confidence: resolved.confidence,
+    classificationModel: resolved.model || 'keyword-rules-v1',
     createdAt: now,
     updatedAt: now,
   }
@@ -134,11 +134,11 @@ export function createMemoInData(data, content) {
   }
 }
 
-export function updateMemoContentInData(data, id, content) {
+export function updateMemoContentInData(data, id, content, classification) {
   const trimmed = content.trim()
   if (!trimmed) return withDefaultMemory(data)
 
-  const classification = classifyByKeywords(trimmed)
+  const resolved = classification ?? classifyByKeywords(trimmed)
   const memos = withDefaultMemory(data).memos
 
   return {
@@ -147,13 +147,14 @@ export function updateMemoContentInData(data, id, content) {
 
       const patch = {
         content: trimmed,
-        title: classification.title,
+        title: resolved.title,
         updatedAt: new Date().toISOString(),
       }
 
       if (!memo.userCategorySlug) {
-        patch.categorySlug = classification.slug
-        patch.confidence = classification.confidence
+        patch.categorySlug = resolved.slug
+        patch.confidence = resolved.confidence
+        patch.classificationModel = resolved.model || 'keyword-rules-v1'
       }
 
       return { ...memo, ...patch }

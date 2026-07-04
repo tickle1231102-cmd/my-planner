@@ -3,6 +3,7 @@ import { useCloudSync } from './context/CloudSyncContext.jsx'
 import {
   getEffectiveCategorySlug,
 } from './lib/memoryCategories.js'
+import { classifyMemoContent } from './lib/memoryClassifyClient.js'
 import {
   countMemosByCategory,
   createMemoInData,
@@ -34,6 +35,7 @@ export default function MemoryView() {
   const [selectedMemoId, setSelectedMemoId] = useState(null)
   const [isEditing, setIsEditing] = useState(false)
   const [editDraft, setEditDraft] = useState('')
+  const [savingEdit, setSavingEdit] = useState(false)
   const [showCategoryPicker, setShowCategoryPicker] = useState(false)
 
   useEffect(() => {
@@ -63,10 +65,11 @@ export default function MemoryView() {
   )
 
   const handleCreate = useCallback(
-    (content) => {
+    async (content) => {
+      const classification = await classifyMemoContent(content)
       let created = null
       updateMemory((prev) => {
-        const next = createMemoInData(prev, content)
+        const next = createMemoInData(prev, content, classification)
         created = next.memos[0] ?? null
         return next
       })
@@ -120,14 +123,32 @@ export default function MemoryView() {
     setEditDraft('')
   }, [])
 
-  const handleSaveEdit = useCallback(() => {
-    if (!selectedMemoId) return
+  const handleSaveEdit = useCallback(async () => {
+    if (!selectedMemoId || savingEdit) return
     const trimmed = editDraft.trim()
     if (!trimmed) return
-    updateMemory((prev) => updateMemoContentInData(prev, selectedMemoId, trimmed))
-    setIsEditing(false)
-    setEditDraft('')
-  }, [editDraft, selectedMemoId, updateMemory])
+
+    setSavingEdit(true)
+    try {
+      const classification = selectedMemo?.userCategorySlug
+        ? null
+        : await classifyMemoContent(trimmed)
+
+      updateMemory((prev) =>
+        updateMemoContentInData(prev, selectedMemoId, trimmed, classification),
+      )
+      setIsEditing(false)
+      setEditDraft('')
+    } finally {
+      setSavingEdit(false)
+    }
+  }, [
+    editDraft,
+    savingEdit,
+    selectedMemo?.userCategorySlug,
+    selectedMemoId,
+    updateMemory,
+  ])
 
   const activeSlug = selectedMemo ? getEffectiveCategorySlug(selectedMemo) : null
 
@@ -286,10 +307,10 @@ export default function MemoryView() {
                   <button
                     type="button"
                     onClick={handleSaveEdit}
-                    disabled={!editDraft.trim()}
+                    disabled={!editDraft.trim() || savingEdit}
                     className="rounded-lg bg-planner-sage px-3 py-1 text-sm font-medium text-white transition hover:bg-planner-sage/90 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    저장
+                    {savingEdit ? '분류 중…' : '저장'}
                   </button>
                 </>
               ) : (

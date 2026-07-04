@@ -4,12 +4,13 @@ import { CategoryBadge } from './CategoryBadge.jsx'
 export function QuickCapture({ onCreate }) {
   const [content, setContent] = useState('')
   const [lastMemo, setLastMemo] = useState(null)
+  const [saving, setSaving] = useState(false)
   const formRef = useRef(null)
   const textareaRef = useRef(null)
   const submittingRef = useRef(false)
   const submitAfterCompositionRef = useRef(false)
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault()
     if (submittingRef.current) return
 
@@ -18,8 +19,9 @@ export function QuickCapture({ onCreate }) {
     if (!trimmed) return
 
     submittingRef.current = true
+    setSaving(true)
     try {
-      const created = onCreate(trimmed)
+      const created = await onCreate(trimmed)
       if (created) {
         setLastMemo(created)
       }
@@ -29,6 +31,7 @@ export function QuickCapture({ onCreate }) {
       }
     } finally {
       submittingRef.current = false
+      setSaving(false)
       submitAfterCompositionRef.current = false
     }
   }
@@ -76,10 +79,10 @@ export function QuickCapture({ onCreate }) {
           </p>
           <button
             type="submit"
-            disabled={!content.trim()}
+            disabled={!content.trim() || saving}
             className="rounded-xl bg-planner-sage px-4 py-2 text-sm font-medium text-white transition hover:bg-planner-sage/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            저장
+            {saving ? '분류 중…' : '저장'}
           </button>
         </div>
       </form>
