@@ -24,6 +24,7 @@ import { DEFAULT_COLUMNS } from './lib/plannerStorage.js'
 import { formatDateDayOnly, formatDateLabel } from './lib/dateFormat.js'
 import { padMonthGoals, padYearGoals } from './lib/goalLists.js'
 import { parseAppRoute, syncAppRoute } from './lib/appRoute.js'
+import { GUEST_USER_KEY } from './lib/userIdentity.js'
 
 const AVAILABLE_YEARS = [2025, 2026, 2027, 2028]
 const DAY_LABELS = ['월', '화', '수', '목', '금', '토', '일']
@@ -1011,6 +1012,7 @@ function App() {
     cloudEnabled,
     localOnly,
     useLocalMode,
+    useGuestMode,
   } = useCloudSync()
 
   if (loading) {
@@ -1030,6 +1032,7 @@ function App() {
       <UserKeyGate
         onSignIn={signIn}
         onRegister={register}
+        onBrowseAsGuest={useGuestMode}
         loading={loading}
         error={error}
       />
@@ -1042,7 +1045,13 @@ function App() {
       deleteAccount={deleteAccount}
       syncing={syncing && !localOnly}
       userKey={userKey}
-      nickname={localOnly ? '로컬 저장' : nickname || userKey}
+      nickname={
+        userKey === GUEST_USER_KEY
+          ? '게스트'
+          : localOnly
+            ? '로컬 저장'
+            : nickname || userKey
+      }
       localOnly={localOnly}
     />
   )
@@ -1467,7 +1476,9 @@ function PlannerApp({ logout, deleteAccount, syncing, userKey, nickname, localOn
             <p className="mt-0.5 text-[11px] text-planner-sage">
               {nickname || userKey}
               {localOnly
-                ? ' · 이 기기에만 저장'
+                ? userKey === GUEST_USER_KEY
+                  ? ' · 체험 모드 (이 기기에만 저장)'
+                  : ' · 이 기기에만 저장'
                 : syncing
                   ? ' · 저장 중…'
                   : ' · 동기화됨'}

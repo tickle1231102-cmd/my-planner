@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { HelpIcon } from './HelpIcon.jsx'
 import { MailIcon } from './MailIcon.jsx'
 import { SUPPORT_EMAIL } from '../lib/supportContact.js'
+import { GUEST_USER_KEY } from '../lib/userIdentity.js'
 
 function AccountLinkRow({ icon: Icon, label, description, href, onClick }) {
   const className =
@@ -54,8 +55,9 @@ export default function AccountSettingsView({
   const [error, setError] = useState('')
   const [helpOpen, setHelpOpen] = useState(false)
 
-  const displayId = localOnly ? '로컬 저장' : userKey
-  const displayNickname = localOnly ? '로컬 저장' : nickname || '—'
+  const isGuest = userKey === GUEST_USER_KEY
+  const displayId = isGuest ? '체험 모드' : localOnly ? '로컬 저장' : userKey
+  const displayNickname = isGuest ? '게스트' : localOnly ? '로컬 저장' : nickname || '—'
 
   const handleLogout = async () => {
     setBusy(true)
@@ -116,11 +118,13 @@ export default function AccountSettingsView({
                 저장 방식
               </dt>
               <dd className="mt-1 text-sm text-planner-ink">
-                {localOnly
-                  ? '이 기기에만 저장'
-                  : syncing
-                    ? '클라우드 동기화 중…'
-                    : '클라우드 동기화'}
+                {isGuest
+                  ? '체험 모드 · 이 기기에만 저장'
+                  : localOnly
+                    ? '이 기기에만 저장'
+                    : syncing
+                      ? '클라우드 동기화 중…'
+                      : '클라우드 동기화'}
               </dd>
             </div>
           </dl>
@@ -154,16 +158,18 @@ export default function AccountSettingsView({
             disabled={busy}
             className="w-full rounded-xl border border-planner-sand bg-white px-4 py-3 text-sm font-medium text-planner-ink transition hover:bg-planner-warm disabled:opacity-50"
           >
-            로그아웃
+            {isGuest || localOnly ? '로그인 화면으로' : '로그아웃'}
           </button>
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={busy}
-            className="w-full rounded-xl border border-planner-rose/30 bg-white px-4 py-3 text-sm font-medium text-planner-rose transition hover:bg-planner-rose-light disabled:opacity-50"
-          >
-            회원 탈퇴
-          </button>
+          {!localOnly && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={busy}
+              className="w-full rounded-xl border border-planner-rose/30 bg-white px-4 py-3 text-sm font-medium text-planner-rose transition hover:bg-planner-rose-light disabled:opacity-50"
+            >
+              회원 탈퇴
+            </button>
+          )}
         </div>
       </div>
     </div>

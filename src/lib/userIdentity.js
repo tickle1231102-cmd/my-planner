@@ -1,4 +1,6 @@
 export const USER_KEY_STORAGE = 'my-planner-user-key'
+export const GUEST_USER_KEY = 'guest'
+export const LOCAL_USER_KEY = 'local-device'
 
 const USER_KEY_RE = /^[a-zA-Z0-9가-힣_-]{3,32}$/
 

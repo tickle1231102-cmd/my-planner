@@ -30,7 +30,7 @@ const MODE_DESCRIPTIONS = {
   resetPassword: '고유 ID와 새 비밀번호를 입력해 비밀번호를 재설정하세요.',
 }
 
-export default function UserKeyGate({ onSignIn, onRegister, loading, error }) {
+export default function UserKeyGate({ onSignIn, onRegister, onBrowseAsGuest, loading, error }) {
   const [mode, setMode] = useState('signIn')
   const [userKey, setUserKey] = useState('')
   const [nickname, setNickname] = useState('')
@@ -40,6 +40,13 @@ export default function UserKeyGate({ onSignIn, onRegister, loading, error }) {
   const [successMessage, setSuccessMessage] = useState('')
   const [foundUserKey, setFoundUserKey] = useState('')
   const [showDbHelp, setShowDbHelp] = useState(false)
+
+  function handleBrowseAsGuest() {
+    window.alert(
+      '게스트 데이터는 이 기기에만 저장됩니다. 회원가입시, 모든 기기에서 데이터를 연동할 수 있습니다.',
+    )
+    onBrowseAsGuest()
+  }
 
   function switchMode(nextMode) {
     setMode(nextMode)
@@ -289,6 +296,27 @@ export default function UserKeyGate({ onSignIn, onRegister, loading, error }) {
                     ? '로그인'
                     : '가입하기'}
           </button>
+
+          {isSignIn && onBrowseAsGuest && (
+            <>
+              <div className="relative py-1">
+                <div className="absolute inset-0 flex items-center" aria-hidden>
+                  <div className="w-full border-t border-planner-sand" />
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="bg-white px-2 text-planner-ink-muted">또는</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleBrowseAsGuest}
+                disabled={loading}
+                className="w-full rounded-xl border border-planner-sand py-3 text-sm font-medium text-planner-ink transition hover:bg-planner-cream disabled:opacity-60"
+              >
+                게스트로 둘러보기
+              </button>
+            </>
+          )}
 
           {isSignIn && (
             <div className="flex items-center justify-center gap-2 text-xs text-planner-ink-muted">

@@ -14,7 +14,7 @@ import {
   signOutAccount,
   deleteAccountRemotely,
 } from '../lib/authAccount.js'
-import { clearAllLocalPlannerData } from '../lib/clearLocalData.js'
+import { clearAllLocalPlannerData, resetGuestLocalData } from '../lib/clearLocalData.js'
 import { fetchAppData, isSupabaseConfigured, persistAppData } from '../lib/cloudApi.js'
 import {
   clearHabitData,
@@ -57,13 +57,19 @@ import {
 import {
   clearUserKey,
   getSavedUserKey,
+  GUEST_USER_KEY,
+  LOCAL_USER_KEY,
   saveUserKey,
 } from '../lib/userIdentity.js'
 
 const CloudSyncContext = createContext(null)
-const LOCAL_USER_KEY = 'local-device'
-
 const SAVE_DELAY_MS = 700
+
+function sessionNickname(key) {
+  if (key === GUEST_USER_KEY) return '게스트'
+  if (key === LOCAL_USER_KEY) return '로컬 저장'
+  return ''
+}
 
 function withDefaultAnnual(annual) {
   return {
@@ -302,9 +308,30 @@ export function CloudSyncProvider({ children }) {
 
   const useLocalMode = useCallback(() => {
     setLocalOnly(true)
-    finishLocalSession(LOCAL_USER_KEY, '로컬 저장')
+    finishLocalSession(LOCAL_USER_KEY, sessionNickname(LOCAL_USER_KEY))
     setLoading(false)
   }, [finishLocalSession])
+
+  const useGuestMode = useCallback(() => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    pendingSaveRef.current = {}
+
+    const fresh = resetGuestLocalData(GUEST_USER_KEY)
+
+    setLocalOnly(true)
+    saveUserKey(GUEST_USER_KEY)
+    setUserKey(GUEST_USER_KEY)
+    setNickname(sessionNickname(GUEST_USER_KEY))
+    setAnnualData(withDefaultAnnual(fresh.annualData))
+    setWeeklyData(fresh.weeklyData)
+    setHabitData(fresh.habitData)
+    setMandalaData(fresh.mandalaData)
+    setMonthlyData(fresh.monthlyData)
+    setMemoryData(fresh.memoryData)
+    setReady(true)
+    setError('')
+    setLoading(false)
+  }, [])
 
   const logout = useCallback(async () => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
@@ -317,6 +344,8 @@ export function CloudSyncProvider({ children }) {
       await signOutAccount()
       clearHabitData()
       if (sessionKey) clearMemoryData(sessionKey)
+    } else if (sessionKey === GUEST_USER_KEY) {
+      clearMemoryData(GUEST_USER_KEY)
     }
 
     clearUserKey()
@@ -361,13 +390,14 @@ export function CloudSyncProvider({ children }) {
     async function restore() {
       const saved = getSavedUserKey()
 
-      if (!cloudEnabled || saved === LOCAL_USER_KEY) {
-        if (saved === LOCAL_USER_KEY || (!cloudEnabled && saved)) {
+      if (!cloudEnabled || saved === LOCAL_USER_KEY || saved === GUEST_USER_KEY) {
+        if (
+          saved === LOCAL_USER_KEY ||
+          saved === GUEST_USER_KEY ||
+          (!cloudEnabled && saved)
+        ) {
           setLocalOnly(true)
-          finishLocalSession(
-            saved === LOCAL_USER_KEY ? LOCAL_USER_KEY : saved,
-            saved === LOCAL_USER_KEY ? '로컬 저장' : '',
-          )
+          finishLocalSession(saved, sessionNickname(saved))
         }
         if (!cancelled) setLoading(false)
         return
@@ -495,6 +525,7 @@ export function CloudSyncProvider({ children }) {
       logout,
       deleteAccount,
       useLocalMode,
+      useGuestMode,
       updateAnnual,
       updateWeekly,
       updateHabitData,
@@ -522,6 +553,7 @@ export function CloudSyncProvider({ children }) {
       logout,
       deleteAccount,
       useLocalMode,
+      useGuestMode,
       updateAnnual,
       updateWeekly,
       updateHabitData,
