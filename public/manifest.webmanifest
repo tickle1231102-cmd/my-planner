@@ -1,6 +1,6 @@
 {
-    "name": "My Planner",
-    "short_name": "Planner",
+    "name": "Focal",
+    "short_name": "Focal",
     "description": "나만의 플래너",
     "start_url": "/",
     "display": "standalone",

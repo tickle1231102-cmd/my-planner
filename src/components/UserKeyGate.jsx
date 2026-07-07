@@ -146,7 +146,7 @@ export default function UserKeyGate({ onSignIn, onRegister, onBrowseAsGuest, loa
     <div className="flex min-h-svh flex-col items-center justify-center bg-planner-cream px-4 py-8">
       <div className="w-full max-w-md rounded-2xl border border-planner-sand bg-white p-6 shadow-soft sm:p-8">
         <p className="text-center text-[10px] font-semibold tracking-[0.25em] text-planner-sage">
-          MY PLANNER
+          FOCAL
         </p>
         <h1 className="mt-2 text-center text-xl font-medium text-planner-ink">
           {MODE_TITLES[mode]}
