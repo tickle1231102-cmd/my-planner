@@ -16,6 +16,7 @@ import {
 } from '../lib/authAccount.js'
 import { clearAllLocalPlannerData, resetGuestLocalData } from '../lib/clearLocalData.js'
 import { fetchAppData, isSupabaseConfigured, persistAppData } from '../lib/cloudApi.js'
+import { syncAppRoute } from '../lib/appRoute.js'
 import {
   clearHabitData,
   hasLocalHabitData,
@@ -54,6 +55,7 @@ import {
   saveAnnualToLocal,
   saveWeeklyToLocal,
 } from '../lib/plannerStorage.js'
+import { getMondayOfWeek } from '../lib/weeklyChecklist.js'
 import {
   clearUserKey,
   getSavedUserKey,
@@ -328,6 +330,18 @@ export function CloudSyncProvider({ children }) {
     setMandalaData(fresh.mandalaData)
     setMonthlyData(fresh.monthlyData)
     setMemoryData(fresh.memoryData)
+
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const weekMonday = getMondayOfWeek(today)
+    syncAppRoute({
+      view: 'weekly',
+      year: weekMonday.getFullYear(),
+      selectedWeekMonday: weekMonday,
+      selectedMonth: null,
+      mobileTab: 'calendar',
+    })
+
     setReady(true)
     setError('')
     setLoading(false)
