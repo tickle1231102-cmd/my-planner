@@ -1,3 +1,5 @@
+import { getMondayOfWeek } from './weeklyChecklist.js'
+
 const VALID_VIEWS = new Set(['annual', 'yearOverview', 'weekly', 'habit', 'mandala', 'monthly', 'memory', 'account'])
 
 export function formatWeekMonday(date) {
@@ -86,4 +88,18 @@ export function syncAppRoute(state) {
 
   const nextUrl = `${window.location.pathname}${nextSearch}${window.location.hash}`
   window.history.replaceState(null, '', nextUrl)
+}
+
+export function syncWeeklyTodayRoute() {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const weekMonday = getMondayOfWeek(today)
+
+  syncAppRoute({
+    view: 'weekly',
+    year: weekMonday.getFullYear(),
+    selectedWeekMonday: weekMonday,
+    selectedMonth: null,
+    mobileTab: 'calendar',
+  })
 }
