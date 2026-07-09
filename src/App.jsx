@@ -13,6 +13,7 @@ import HabitTracker from './HabitTracker.jsx'
 import MemoryView from './MemoryView.jsx'
 import MandalartView from './MandalartView.jsx'
 import UserKeyGate from './components/UserKeyGate.jsx'
+import { ImeSafeTextarea } from './components/ImeSafeTextarea.jsx'
 import SupabaseSetup from './components/SupabaseSetup.jsx'
 import AccountSettingsView from './components/AccountSettingsView.jsx'
 import { AccountButton } from './components/AccountButton.jsx'
@@ -25,6 +26,7 @@ import { formatDateDayOnly, formatDateLabel } from './lib/dateFormat.js'
 import { padMonthGoals, padYearGoals } from './lib/goalLists.js'
 import { parseAppRoute, syncAppRoute } from './lib/appRoute.js'
 import { GUEST_USER_KEY } from './lib/userIdentity.js'
+import { DRAFT_DEBOUNCE_MS } from './lib/debouncedDraft.js'
 
 const AVAILABLE_YEARS = [2025, 2026, 2027, 2028]
 const DAY_LABELS = ['월', '화', '수', '목', '금', '토', '일']
@@ -140,6 +142,23 @@ function usePlannerStorage(year) {
   const [dateColors, setDateColors] = useState(() => annualData.dateColors || {})
   const [monthGoals, setMonthGoals] = useState(() => annualData.monthGoals || {})
   const [yearGoals, setYearGoals] = useState(() => annualData.yearGoals || {})
+  const snapshotRef = useRef({
+    year,
+    columns,
+    weekData,
+    dateColors,
+    monthGoals,
+    yearGoals,
+  })
+
+  snapshotRef.current = {
+    year,
+    columns,
+    weekData,
+    dateColors,
+    monthGoals,
+    yearGoals,
+  }
 
   useEffect(() => {
     if (!ready || hydratedRef.current) return
@@ -153,8 +172,20 @@ function usePlannerStorage(year) {
 
   useEffect(() => {
     if (!ready || !hydratedRef.current) return
-    updateAnnual({ year, columns, weekData, dateColors, monthGoals, yearGoals })
+
+    const timer = setTimeout(() => {
+      updateAnnual(snapshotRef.current)
+    }, DRAFT_DEBOUNCE_MS)
+
+    return () => clearTimeout(timer)
   }, [year, columns, weekData, dateColors, monthGoals, yearGoals, ready, updateAnnual])
+
+  useEffect(() => {
+    return () => {
+      if (!ready || !hydratedRef.current) return
+      updateAnnual(snapshotRef.current)
+    }
+  }, [ready, updateAnnual])
 
   const updateCell = useCallback((weekId, columnId, value) => {
     setWeekData((prev) => ({
@@ -807,9 +838,9 @@ function PlannerGrid({
                   className={`border-b border-r border-planner-sand/40 ${rowBg} ${colIndex === 0 ? MEMO_CALENDAR_DIVIDER : ''}`}
                   style={{ minHeight: ROW_MIN_HEIGHT }}
                 >
-                  <textarea
+                  <ImeSafeTextarea
                     value={weekData[week.id]?.[col.id] || ''}
-                    onChange={(e) => updateCell(week.id, col.id, e.target.value)}
+                    onChange={(value) => updateCell(week.id, col.id, value)}
                     className="h-full w-full bg-transparent px-2 py-1 text-xs leading-snug text-planner-ink transition focus:bg-white/80 focus:outline-none focus:ring-1 focus:ring-inset focus:ring-planner-sage-muted/40"
                     rows={1}
                   />
@@ -977,9 +1008,9 @@ function MobileNotes({
                   className={`border-b border-r border-planner-sand/60 ${rowBg} ${colIndex === 0 ? MEMO_CALENDAR_DIVIDER : ''}`}
                   style={{ height: MOBILE_WEEK_ROW_HEIGHT }}
                 >
-                  <textarea
+                  <ImeSafeTextarea
                     value={weekData[week.id]?.[col.id] || ''}
-                    onChange={(e) => updateCell(week.id, col.id, e.target.value)}
+                    onChange={(value) => updateCell(week.id, col.id, value)}
                     className="h-full w-full resize-none bg-transparent px-2 py-1 text-xs leading-snug text-planner-ink focus:bg-white/80 focus:outline-none"
                     rows={1}
                   />

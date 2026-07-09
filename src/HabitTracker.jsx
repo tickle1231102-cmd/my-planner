@@ -1,5 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useCloudSync } from './context/CloudSyncContext.jsx'
+import { ImeSafeInput } from './components/ImeSafeInput.jsx'
+import { useDebouncedDraft } from './lib/debouncedDraft.js'
 import {
   buildWeekChunks,
   computeDailyProgress,
@@ -36,20 +38,32 @@ function useHabitTracker(year, month) {
   const { habitData, updateHabitData } = useCloudSync()
 
   const daysInMonth = getDaysInMonth(year, month)
-  const monthData = useMemo(
+  const resetKey = `${year}-${month}`
+  const remoteMonth = useMemo(
     () => getMonthData(habitData, year, month),
     [habitData, year, month],
   )
 
+  const commitMonth = useCallback(
+    (nextMonth) => {
+      updateHabitData((prev) => setMonthData(prev, year, month, nextMonth))
+    },
+    [month, updateHabitData, year],
+  )
+
+  const [monthData, setMonthDataDraft, flushMonth] = useDebouncedDraft(
+    remoteMonth,
+    commitMonth,
+    { resetKey },
+  )
+
   const updateMonth = useCallback(
     (updater) => {
-      updateHabitData((prev) => {
-        const current = getMonthData(prev, year, month)
-        const next = typeof updater === 'function' ? updater(current) : updater
-        return setMonthData(prev, year, month, next)
-      })
+      setMonthDataDraft((current) =>
+        typeof updater === 'function' ? updater(current) : updater,
+      )
     },
-    [updateHabitData, year, month],
+    [setMonthDataDraft],
   )
 
   const updateHabit = useCallback(
@@ -65,16 +79,20 @@ function useHabitTracker(year, month) {
 
   const toggleCheck = useCallback(
     (habitIndex, slot) => {
+      flushMonth()
       updateHabitData((prev) => toggleHabitCheck(prev, habitIndex, slot))
     },
-    [updateHabitData],
+    [flushMonth, updateHabitData],
   )
 
   const toggleWeekHabit = useCallback(
     (habitIndex, chunk) => {
-      updateHabitData((prev) => toggleHabitWeekComplete(prev, habitIndex, chunk, daysInMonth))
+      flushMonth()
+      updateHabitData((prev) =>
+        toggleHabitWeekComplete(prev, habitIndex, chunk, daysInMonth),
+      )
     },
-    [updateHabitData, daysInMonth],
+    [daysInMonth, flushMonth, updateHabitData],
   )
 
   const isChecked = useCallback(
@@ -419,12 +437,10 @@ export default function HabitTracker({ today }) {
                   className="grid grid-cols-[minmax(180px,220px)_minmax(0,1fr)_56px_minmax(150px,190px)] border-b border-planner-sand/70 last:border-b-0"
                 >
                   <div className="border-r border-planner-sand px-2 py-1.5">
-                    <input
+                    <ImeSafeInput
                       type="text"
                       value={habit.label}
-                      onChange={(event) =>
-                        updateHabit(habit.id, { label: event.target.value })
-                      }
+                      onChange={(value) => updateHabit(habit.id, { label: value })}
                       placeholder="습관을 입력하세요"
                       className="w-full bg-transparent text-xs text-planner-ink placeholder:text-planner-ink-muted/45 focus:outline-none"
                     />

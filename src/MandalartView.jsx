@@ -1,5 +1,8 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useCloudSync } from './context/CloudSyncContext.jsx'
+import { ImeSafeTextarea } from './components/ImeSafeTextarea.jsx'
+import { ImeSafeInput } from './components/ImeSafeInput.jsx'
+import { useDebouncedDraft } from './lib/debouncedDraft.js'
 import {
   createDefaultMandalaData,
   getMandalaCellClass,
@@ -38,9 +41,9 @@ function MandalaCell({ blockIndex, cellIndex, value, onChange }) {
         isMainGoal ? 'shadow-[inset_0_0_0_1px_rgba(122,158,126,0.25)]' : '',
       ].join(' ')}
     >
-      <textarea
+      <ImeSafeTextarea
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={onChange}
         rows={2}
         className="h-full min-h-[2.25rem] w-full resize-none bg-transparent px-1 py-0.5 text-center text-[9px] leading-tight text-planner-ink placeholder:text-planner-ink-muted/40 focus:outline-none focus:ring-1 focus:ring-inset focus:ring-planner-sage/30 sm:min-h-[2.75rem] sm:px-1.5 sm:py-1 sm:text-[10px] md:text-xs"
         placeholder=""
@@ -78,25 +81,38 @@ function MandalaBlock({ blockIndex, cells, onCellChange }) {
 
 function useMandalartStorage() {
   const { mandalaData, updateMandala } = useCloudSync()
-  const data = normalizeMandalaData(mandalaData)
+  const remoteData = useMemo(
+    () => normalizeMandalaData(mandalaData),
+    [mandalaData],
+  )
 
-  const patchData = useCallback(
-    (patch) => {
-      updateMandala((prev) => normalizeMandalaData({ ...normalizeMandalaData(prev), ...patch }))
+  const commitData = useCallback(
+    (nextData) => {
+      updateMandala(() => nextData)
     },
     [updateMandala],
   )
 
+  const [data, setData] = useDebouncedDraft(remoteData, commitData, {
+    resetKey: remoteData.year,
+  })
+
+  const patchData = useCallback(
+    (patch) => {
+      setData((prev) => ({ ...prev, ...patch }))
+    },
+    [setData],
+  )
+
   const setCell = useCallback(
     (index, value) => {
-      updateMandala((prev) => {
-        const current = normalizeMandalaData(prev)
-        const cells = [...current.cells]
+      setData((prev) => {
+        const cells = [...prev.cells]
         cells[index] = value
-        return { ...current, cells }
+        return { ...prev, cells }
       })
     },
-    [updateMandala],
+    [setData],
   )
 
   return { data, patchData, setCell }
@@ -132,16 +148,16 @@ export default function MandalartView() {
                 className="pointer-events-none absolute -left-2 top-1/2 hidden size-4 -translate-y-1/2 rotate-45 border-b-2 border-l-2 border-planner-sage/70 bg-planner-sage-light/40 lg:block"
                 aria-hidden
               />
-              <input
+              <ImeSafeInput
                 type="text"
                 value={data.keyword}
-                onChange={(e) => patchData({ keyword: e.target.value })}
+                onChange={(value) => patchData({ keyword: value })}
                 placeholder={`${year} Keyword`}
                 className="mb-2 w-full border-b border-planner-sage/25 bg-transparent px-1 py-1 text-sm font-medium text-planner-ink placeholder:text-planner-ink-muted/50 focus:border-planner-sage focus:outline-none"
               />
-              <textarea
+              <ImeSafeTextarea
                 value={data.resolution}
-                onChange={(e) => patchData({ resolution: e.target.value })}
+                onChange={(value) => patchData({ resolution: value })}
                 placeholder={`Write your ${year} resolution`}
                 rows={3}
                 className="w-full resize-none bg-transparent px-1 py-1 text-sm leading-relaxed text-planner-ink placeholder:text-planner-ink-muted/50 focus:outline-none"

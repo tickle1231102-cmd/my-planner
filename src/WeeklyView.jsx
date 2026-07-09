@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useCloudSync } from './context/CloudSyncContext.jsx'
+import { ImeSafeInput } from './components/ImeSafeInput.jsx'
+import { ImeSafeTextarea } from './components/ImeSafeTextarea.jsx'
+import { useDebouncedDraft } from './lib/debouncedDraft.js'
 import { formatDateWithWeekday, formatWeekRange } from './lib/dateFormat.js'
 import { getDominantMonthAndYear } from './lib/monthGoals.js'
 import { padMonthGoals, padWeekGoals } from './lib/goalLists.js'
@@ -273,35 +276,42 @@ function normalizeWeekData(raw) {
 
 function useWeeklyStorage(weekId) {
   const { weeklyData, updateWeekly } = useCloudSync()
+  const remoteWeek = useMemo(
+    () => normalizeWeekData(weeklyData[weekId]),
+    [weeklyData, weekId],
+  )
 
-  const weekData = normalizeWeekData(weeklyData[weekId])
-
-  const patchWeek = useCallback(
-    (patch) => {
+  const commitWeek = useCallback(
+    (nextWeek) => {
       updateWeekly((prev) => ({
         ...prev,
-        [weekId]: { ...normalizeWeekData(prev[weekId]), ...patch },
+        [weekId]: nextWeek,
       }))
     },
     [weekId, updateWeekly],
   )
 
+  const [weekData, setWeekData] = useDebouncedDraft(remoteWeek, commitWeek, {
+    resetKey: weekId,
+  })
+
+  const patchWeek = useCallback(
+    (patch) => {
+      setWeekData((prev) => ({ ...prev, ...patch }))
+    },
+    [setWeekData],
+  )
+
   const setWeekGoal = useCallback(
     (goalId, updates) => {
-      updateWeekly((prev) => {
-        const current = normalizeWeekData(prev[weekId])
-        return {
-          ...prev,
-          [weekId]: {
-            ...current,
-            weekGoals: current.weekGoals.map((goal) =>
-              goal.id === goalId ? { ...goal, ...updates } : goal,
-            ),
-          },
-        }
-      })
+      setWeekData((prev) => ({
+        ...prev,
+        weekGoals: prev.weekGoals.map((goal) =>
+          goal.id === goalId ? { ...goal, ...updates } : goal,
+        ),
+      }))
     },
-    [weekId, updateWeekly],
+    [setWeekData],
   )
 
   const setMemo = useCallback(
@@ -311,75 +321,58 @@ function useWeeklyStorage(weekId) {
 
   const setDayNote = useCallback(
     (dayIdx, note) => {
-      updateWeekly((prev) => {
-        const current = normalizeWeekData(prev[weekId])
-        return {
-          ...prev,
-          [weekId]: {
-            ...current,
-            dayNotes: { ...current.dayNotes, [dayIdx]: note },
-          },
-        }
-      })
+      setWeekData((prev) => ({
+        ...prev,
+        dayNotes: { ...prev.dayNotes, [dayIdx]: note },
+      }))
     },
-    [weekId, updateWeekly],
+    [setWeekData],
   )
 
   const setDayTask = useCallback(
     (dayIdx, taskId, updates) => {
-      updateWeekly((prev) => {
-        const current = normalizeWeekData(prev[weekId])
-        return {
-          ...prev,
-          [weekId]: {
-            ...current,
-            dayTasks: {
-              ...current.dayTasks,
-              [dayIdx]: current.dayTasks[dayIdx].map((t) =>
-                t.id === taskId ? { ...t, ...updates } : t,
-              ),
-            },
-          },
-        }
-      })
+      setWeekData((prev) => ({
+        ...prev,
+        dayTasks: {
+          ...prev.dayTasks,
+          [dayIdx]: prev.dayTasks[dayIdx].map((task) =>
+            task.id === taskId ? { ...task, ...updates } : task,
+          ),
+        },
+      }))
     },
-    [weekId, updateWeekly],
+    [setWeekData],
   )
 
   const setSlotFilled = useCallback(
     (dayIdx, hour, slot, value) => {
       const key = slotKey(dayIdx, hour, slot)
-      updateWeekly((prev) => {
-        const current = normalizeWeekData(prev[weekId])
-        const currentValue = current.filledSlots[key]
+      setWeekData((prev) => {
+        const currentValue = prev.filledSlots[key]
         if (currentValue === value) return prev
-        const next = { ...current.filledSlots }
-        if (!value) next[key] = false
-        else next[key] = value
-        return {
-          ...prev,
-          [weekId]: { ...current, filledSlots: next },
-        }
+        const nextSlots = { ...prev.filledSlots }
+        if (!value) nextSlots[key] = false
+        else nextSlots[key] = value
+        return { ...prev, filledSlots: nextSlots }
       })
     },
-    [weekId, updateWeekly],
+    [setWeekData],
   )
 
   const moveDayTask = useCallback(
     (fromDayIdx, taskId, toDayIdx) => {
       if (fromDayIdx === toDayIdx) return
-      updateWeekly((prev) => {
-        const current = normalizeWeekData(prev[weekId])
-        const fromTasks = [...current.dayTasks[fromDayIdx]]
-        const fromIndex = fromTasks.findIndex((t) => t.id === taskId)
+      setWeekData((prev) => {
+        const fromTasks = [...prev.dayTasks[fromDayIdx]]
+        const fromIndex = fromTasks.findIndex((task) => task.id === taskId)
         if (fromIndex < 0) return prev
 
         const moving = fromTasks[fromIndex]
         if (!moving.done) return prev
 
-        const toTasks = [...current.dayTasks[toDayIdx]]
+        const toTasks = [...prev.dayTasks[toDayIdx]]
         const emptyIndex = toTasks.findIndex(
-          (t) => !t.text.trim() && !t.done && !t.postponed,
+          (task) => !task.text.trim() && !task.done && !task.postponed,
         )
         if (emptyIndex < 0) return prev
 
@@ -398,18 +391,15 @@ function useWeeklyStorage(weekId) {
 
         return {
           ...prev,
-          [weekId]: {
-            ...current,
-            dayTasks: {
-              ...current.dayTasks,
-              [fromDayIdx]: fromTasks,
-              [toDayIdx]: toTasks,
-            },
+          dayTasks: {
+            ...prev.dayTasks,
+            [fromDayIdx]: fromTasks,
+            [toDayIdx]: toTasks,
           },
         }
       })
     },
-    [weekId, updateWeekly],
+    [setWeekData],
   )
 
   return {
@@ -683,11 +673,11 @@ function TaskRow({
         onChange={(done) => onToggle({ done, postponed: done ? false : task.postponed })}
         className="mx-2 shrink-0"
       />
-      <input
+      <ImeSafeInput
         ref={inputRef}
         type="text"
         value={task.text}
-        onChange={(e) => onText(e.target.value)}
+        onChange={onText}
         onCompositionStart={() => {
           composingRef.current = true
         }}
@@ -831,9 +821,9 @@ function DayTasksPanel({
             To do list
           </p>
         )}
-        <textarea
+        <ImeSafeTextarea
           value={dayNote}
-          onChange={(e) => setDayNote(dayIdx, e.target.value)}
+          onChange={(value) => setDayNote(dayIdx, value)}
           placeholder="메모"
           className="w-full shrink-0 resize-none border-b border-planner-sand/70 bg-white px-1.5 py-1 text-[10px] leading-snug text-planner-ink placeholder:text-planner-ink-muted/40 focus:outline-none"
           style={{ height: noteHeight }}
@@ -896,9 +886,9 @@ function DayTasksPanel({
           To do list
         </p>
       )}
-      <textarea
+      <ImeSafeTextarea
         value={dayNote}
-        onChange={(e) => setDayNote(dayIdx, e.target.value)}
+        onChange={(value) => setDayNote(dayIdx, value)}
         placeholder="메모"
         className={[
           'w-full shrink-0 resize-none border-b border-planner-sand/70 bg-white text-planner-ink placeholder:text-planner-ink-muted/40 focus:outline-none',
@@ -1489,9 +1479,9 @@ function WeeklySidebarContent({
       <WeeklyHabitStrip days={days} compact={compact} onOpenHabit={onOpenHabit} />
 
       <SectionHeader compact={compact}>MEMO</SectionHeader>
-      <textarea
+      <ImeSafeTextarea
         value={memo}
-        onChange={(e) => setMemo(e.target.value)}
+        onChange={setMemo}
         placeholder="메모"
         className={[
           'w-full resize-none bg-white text-planner-ink placeholder:text-planner-ink-muted/40 focus:outline-none',

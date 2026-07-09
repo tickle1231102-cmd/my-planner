@@ -1,4 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
+import { ImeSafeTextarea } from './components/ImeSafeTextarea.jsx'
+import { useDebouncedDraft } from './lib/debouncedDraft.js'
 import { AppNavMenu } from './components/AppNavMenu.jsx'
 import { CalendarIcon } from './components/CalendarIcon.jsx'
 import { PlannerQuickNav } from './components/PlannerQuickNav.jsx'
@@ -139,9 +141,9 @@ function DayCell({ day, year, month, note, today, onNoteChange, onOpenWeek }) {
       >
         {day}
       </button>
-      <textarea
+      <ImeSafeTextarea
         value={note}
-        onChange={(e) => onNoteChange(e.target.value)}
+        onChange={onNoteChange}
         className="min-h-0 flex-1 resize-none bg-transparent px-1 pb-1 pt-0 text-[10px] leading-snug text-planner-ink focus:outline-none focus:ring-1 focus:ring-inset focus:ring-planner-sage-muted/40 sm:px-1.5 sm:pb-1.5 sm:text-xs"
         placeholder=""
         aria-label={`${month + 1}월 ${day}일 메모`}
@@ -153,35 +155,36 @@ function DayCell({ day, year, month, note, today, onNoteChange, onOpenWeek }) {
 function useMonthlyPlanner(year, month) {
   const { monthlyData, updateMonthly } = useCloudSync()
 
-  const monthEntry = useMemo(
+  const remoteEntry = useMemo(
     () => getMonthEntry(monthlyData, year, month),
     [monthlyData, year, month],
   )
+  const resetKey = `${year}-${month}`
 
-  const updateMonthEntry = useCallback(
-    (updater) => {
-      updateMonthly((prev) => {
-        const current = getMonthEntry(prev, year, month)
-        const next = typeof updater === 'function' ? updater(current) : updater
-        return setMonthEntry(prev, year, month, next)
-      })
+  const commitEntry = useCallback(
+    (nextEntry) => {
+      updateMonthly((prev) => setMonthEntry(prev, year, month, nextEntry))
     },
-    [updateMonthly, year, month],
+    [month, updateMonthly, year],
   )
 
+  const [monthEntry, setMonthEntryDraft] = useDebouncedDraft(remoteEntry, commitEntry, {
+    resetKey,
+  })
+
   const setNotes = useCallback(
-    (notes) => updateMonthEntry((entry) => ({ ...entry, notes })),
-    [updateMonthEntry],
+    (notes) => setMonthEntryDraft((entry) => ({ ...entry, notes })),
+    [setMonthEntryDraft],
   )
 
   const setDayNote = useCallback(
     (day, note) => {
-      updateMonthEntry((entry) => ({
+      setMonthEntryDraft((entry) => ({
         ...entry,
         dayNotes: { ...entry.dayNotes, [String(day)]: note },
       }))
     },
-    [updateMonthEntry],
+    [setMonthEntryDraft],
   )
 
   return { monthEntry, setNotes, setDayNote }
@@ -231,9 +234,9 @@ function MonthNotesSection({ monthEntry, notesRef, onSetNotes }) {
       <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-planner-ink-muted">
         Notes
       </h2>
-      <textarea
+      <ImeSafeTextarea
         value={monthEntry.notes}
-        onChange={(e) => onSetNotes(e.target.value)}
+        onChange={onSetNotes}
         rows={5}
         className="min-h-[6rem] w-full resize-none bg-transparent text-xs leading-relaxed text-planner-ink placeholder:text-planner-ink-muted/50 focus:outline-none sm:text-sm"
         placeholder="이번 달 메모를 적어 보세요"
@@ -281,10 +284,10 @@ function MobileNotesCollapsible({
 
       {expanded && (
         <div className="mt-2 max-h-[38vh] overflow-y-auto rounded-xl border border-planner-sand bg-planner-warm/70 p-3">
-          <textarea
+          <ImeSafeTextarea
             ref={notesRef}
             value={monthEntry.notes}
-            onChange={(e) => onSetNotes(e.target.value)}
+            onChange={onSetNotes}
             rows={6}
             className="min-h-[8rem] w-full resize-none bg-transparent text-sm leading-relaxed text-planner-ink placeholder:text-planner-ink-muted/50 focus:outline-none"
             placeholder="이번 달 메모를 적어 보세요"

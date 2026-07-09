@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { CategoryBadge } from './CategoryBadge.jsx'
+import { ImeSafeTextarea } from '../ImeSafeTextarea.jsx'
 
 export function QuickCapture({ onCreate }) {
   const [content, setContent] = useState('')
@@ -63,10 +64,10 @@ export function QuickCapture({ onCreate }) {
   return (
     <div className="rounded-2xl border border-planner-sand bg-white p-4 shadow-soft">
       <form ref={formRef} onSubmit={handleSubmit}>
-        <textarea
+        <ImeSafeTextarea
           ref={textareaRef}
           value={content}
-          onChange={(event) => setContent(event.target.value)}
+          onChange={(value) => setContent(value)}
           onKeyDown={handleKeyDown}
           onCompositionEnd={handleCompositionEnd}
           placeholder="무엇이든 자유롭게 적어보세요. 자동으로 분류해 드립니다."

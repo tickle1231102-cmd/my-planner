@@ -19,6 +19,7 @@ import { MemoCard } from './components/memory/MemoCard.jsx'
 import { MemoryMindMap } from './components/memory/MemoryMindMap.jsx'
 import { CategoryPicker } from './components/memory/CategoryPicker.jsx'
 import { QuickCapture } from './components/memory/QuickCapture.jsx'
+import { ImeSafeTextarea } from './components/ImeSafeTextarea.jsx'
 
 const TABS = [
   { id: 'home', label: '홈' },
@@ -360,9 +361,9 @@ export default function MemoryView() {
             )}
 
             {isEditing ? (
-              <textarea
+              <ImeSafeTextarea
                 value={editDraft}
-                onChange={(event) => setEditDraft(event.target.value)}
+                onChange={setEditDraft}
                 rows={8}
                 className="w-full resize-y rounded-xl border border-planner-sand bg-planner-cream/40 px-4 py-3 text-sm leading-relaxed text-planner-ink focus:border-planner-sage-muted focus:outline-none focus:ring-2 focus:ring-planner-sage-light"
                 autoFocus
