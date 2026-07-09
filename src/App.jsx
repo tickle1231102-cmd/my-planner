@@ -737,7 +737,7 @@ function PlannerGrid({
         style={{ display: 'grid', gridTemplateColumns: gridCols }}
       >
         {/* Column headers + memo labels */}
-        <div className="border-b border-r border-planner-sand bg-planner-warm" />
+        <div className="border-b border-r border-planner-sand bg-planner-month-col" />
         <div
           className="col-span-7 flex items-center justify-center border-b border-r border-planner-sand bg-planner-sage-light/50 py-0.5 text-[10px] font-medium text-planner-sage"
         >
@@ -758,7 +758,7 @@ function PlannerGrid({
           +
         </button>
 
-        <div className="sticky top-0 z-10 border-b border-r border-planner-sand bg-planner-warm" />
+        <div className="sticky top-0 z-10 border-b border-r border-planner-sand bg-planner-month-col" />
         {DAY_LABELS.map((day, i) => (
           <div
             key={day}
@@ -793,10 +793,9 @@ function PlannerGrid({
             <div key={week.id} className="contents">
               {monthInfo && (
                 <div
-                  className={`flex items-center justify-center border-b border-r border-planner-sand text-[11px] font-medium text-planner-ink-muted ${rowBg} ${compact ? 'text-[10px]' : ''}`}
+                  className={`flex items-center justify-center border-b border-r border-planner-sand bg-planner-month-col text-[11px] font-semibold text-planner-sage ${compact ? 'text-[10px]' : ''}`}
                   style={{
                     gridRow: `span ${monthInfo.count}`,
-                    backgroundColor: 'rgba(240, 235, 227, 0.85)',
                   }}
                 >
                   {MONTH_LABELS[monthInfo.month]}
@@ -869,7 +868,7 @@ function MobileCalendar({ weeks, year, today, monthSpans, dateColors, onDateSele
         }}
       >
         <div
-          className="border-b border-r border-planner-sand bg-planner-warm"
+          className="border-b border-r border-planner-sand bg-planner-month-col"
           style={{ gridColumn: 1, height: MOBILE_HEADER_TOP_HEIGHT }}
         />
         <div
@@ -879,7 +878,7 @@ function MobileCalendar({ weeks, year, today, monthSpans, dateColors, onDateSele
           달력
         </div>
         <div
-          className="border-b border-r border-planner-sand bg-planner-warm"
+          className="border-b border-r border-planner-sand bg-planner-month-col"
           style={{ gridColumn: 1, height: MOBILE_HEADER_SUB_HEIGHT }}
         />
         {DAY_LABELS.map((day, i) => (
@@ -905,11 +904,10 @@ function MobileCalendar({ weeks, year, today, monthSpans, dateColors, onDateSele
             <div key={week.id} className="contents">
               {monthInfo && (
                 <div
-                  className="flex items-center justify-center border-b border-r border-planner-sand text-[10px] font-medium text-planner-ink-muted"
+                  className="flex items-center justify-center border-b border-r border-planner-sand bg-planner-month-col text-[10px] font-semibold text-planner-sage"
                   style={{
                     gridColumn: 1,
                     gridRow: `span ${monthInfo.count}`,
-                    backgroundColor: 'rgba(240, 235, 227, 0.85)',
                   }}
                 >
                   {MONTH_LABELS[monthInfo.month]}

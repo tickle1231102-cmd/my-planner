@@ -21,6 +21,15 @@
       rel="stylesheet"
     />
     <title>Focal</title>
+    <script>
+      ;(function () {
+        try {
+          if (localStorage.getItem('my-planner-theme') === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark')
+          }
+        } catch (_) {}
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

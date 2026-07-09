@@ -71,5 +71,5 @@ export function getMandalaCellClass(blockIndex, cellIndex) {
   if (isCenterBlock) {
     return 'bg-planner-sage-light/60 border-planner-sage/25'
   }
-  return 'bg-white border-planner-sage/20'
+  return 'bg-planner-surface border-planner-sage/20'
 }

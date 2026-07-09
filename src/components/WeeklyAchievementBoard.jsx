@@ -59,7 +59,7 @@ function WeekProgressRing({ percent, accent, size = 88 }) {
           cy={center}
           r={normalizedRadius}
           fill="none"
-          stroke="#E8E2D8"
+          stroke="var(--planner-sand)"
           strokeWidth={stroke}
         />
         <circle

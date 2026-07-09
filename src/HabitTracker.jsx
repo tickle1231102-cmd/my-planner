@@ -135,7 +135,7 @@ function ProgressRing({ percent }) {
           cy="54"
           r={normalizedRadius}
           fill="none"
-          stroke="#E8E2D8"
+          stroke="var(--planner-sand)"
           strokeWidth={stroke}
         />
         <circle
@@ -143,7 +143,7 @@ function ProgressRing({ percent }) {
           cy="54"
           r={normalizedRadius}
           fill="none"
-          stroke="#7A9E7E"
+          stroke="var(--planner-sage)"
           strokeWidth={stroke}
           strokeDasharray={circumference}
           strokeDashoffset={offset}
@@ -202,20 +202,20 @@ function DailyProgressChart({ values }) {
               y1={y}
               x2={innerWidth}
               y2={y}
-              stroke="#E8E2D8"
+              stroke="var(--planner-sand)"
               strokeWidth="1"
             />
           )
         })}
-        <path d={areaPath} fill="#E4EDE5" opacity="0.85" />
-        <path d={linePath} fill="none" stroke="#7A9E7E" strokeWidth="2.2" />
+        <path d={areaPath} fill="var(--planner-sage-light)" opacity="0.85" />
+        <path d={linePath} fill="none" stroke="var(--planner-sage)" strokeWidth="2.2" />
         {points.map((point) => (
           <circle
             key={point.day}
             cx={point.x}
             cy={point.y}
             r="2.5"
-            fill="#5A9E82"
+            fill="var(--planner-today-ring)"
           />
         ))}
       </g>

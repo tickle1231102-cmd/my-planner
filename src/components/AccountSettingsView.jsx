@@ -1,8 +1,11 @@
 import { useState } from 'react'
 import { HelpIcon } from './HelpIcon.jsx'
 import { MailIcon } from './MailIcon.jsx'
+import { ThemeIcon } from './ThemeIcon.jsx'
 import { SUPPORT_EMAIL } from '../lib/supportContact.js'
 import { GUEST_USER_KEY } from '../lib/userIdentity.js'
+import { THEMES } from '../lib/theme.js'
+import { useTheme } from '../context/ThemeContext.jsx'
 
 function AccountLinkRow({ icon: Icon, label, description, href, onClick }) {
   const className =
@@ -54,6 +57,7 @@ export default function AccountSettingsView({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [helpOpen, setHelpOpen] = useState(false)
+  const { theme, setTheme } = useTheme()
 
   const isGuest = userKey === GUEST_USER_KEY
   const displayId = isGuest ? '체험 모드' : localOnly ? '로컬 저장' : userKey
@@ -128,6 +132,47 @@ export default function AccountSettingsView({
               </dd>
             </div>
           </dl>
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-planner-sand bg-white p-5 shadow-soft">
+          <div className="flex items-start gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-planner-sage-light text-planner-sage">
+              <ThemeIcon className="size-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm font-medium text-planner-ink">테마 설정</h2>
+              <p className="mt-0.5 text-xs text-planner-ink-muted">
+                앱 전체 색상을 변경합니다.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            {Object.values(THEMES).map((option) => {
+              const active = theme === option.id
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => setTheme(option.id)}
+                  disabled={busy}
+                  className={[
+                    'rounded-xl border px-3 py-3 text-left transition',
+                    active
+                      ? 'border-planner-sage bg-planner-sage-light ring-2 ring-planner-sage/30'
+                      : 'border-planner-sand bg-planner-cream/40 hover:bg-planner-warm',
+                  ].join(' ')}
+                >
+                  <span className="block text-sm font-medium text-planner-ink">
+                    {option.label}
+                  </span>
+                  <span className="mt-1 block text-xs text-planner-ink-muted">
+                    {option.description}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
         </div>
 
         <div className="mt-4 space-y-2">

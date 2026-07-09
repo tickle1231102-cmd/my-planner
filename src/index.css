@@ -1,6 +1,64 @@
 @import "tailwindcss";
 @config "../tailwind.config.js";
 
+:root {
+  color-scheme: light;
+
+  --planner-sage: #7a9e7e;
+  --planner-sage-light: #e4ede5;
+  --planner-sage-muted: #b5c9b7;
+  --planner-mist: #8bafc4;
+  --planner-mist-light: #e3eef4;
+  --planner-rose: #c4a0a0;
+  --planner-rose-light: #f4eaea;
+  --planner-cream: #faf7f2;
+  --planner-warm: #f0ebe3;
+  --planner-sand: #e8e2d8;
+  --planner-ink: #3d3832;
+  --planner-ink-muted: #7a746c;
+  --planner-today: #c5e8d8;
+  --planner-today-ring: #5a9e82;
+  --planner-weekend: #edf5ee;
+  --planner-year-gold: #e8d5a8;
+  --planner-sun: #edd060;
+  --planner-peach: #f5a882;
+  --planner-slate: #5a5652;
+  --planner-surface: #ffffff;
+  --planner-month-col: #c5d6c8;
+
+  --shadow-soft: 0 2px 16px rgba(61, 56, 50, 0.06);
+  --shadow-cell: inset 0 0 0 1px rgba(61, 56, 50, 0.06);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --planner-sage: #8fb593;
+  --planner-sage-light: #2a332b;
+  --planner-sage-muted: #4a5e4d;
+  --planner-mist: #7a9db5;
+  --planner-mist-light: #243038;
+  --planner-rose: #c9a0a0;
+  --planner-rose-light: #3a2e2e;
+  --planner-cream: #1c1a18;
+  --planner-warm: #24211e;
+  --planner-sand: #332f2b;
+  --planner-ink: #ede8e0;
+  --planner-ink-muted: #a39e96;
+  --planner-today: #2d4a3e;
+  --planner-today-ring: #6bb896;
+  --planner-weekend: #252d26;
+  --planner-year-gold: #4a4030;
+  --planner-sun: #8a7030;
+  --planner-peach: #8a5a48;
+  --planner-slate: #9a9690;
+  --planner-surface: #2a2724;
+  --planner-month-col: #2d3630;
+
+  --shadow-soft: 0 2px 16px rgba(0, 0, 0, 0.35);
+  --shadow-cell: inset 0 0 0 1px rgba(237, 232, 224, 0.06);
+}
+
 @layer base {
   html {
     scroll-behavior: smooth;
@@ -41,5 +99,17 @@
 
   .scrollbar-thin::-webkit-scrollbar-track {
     @apply bg-transparent;
+  }
+
+  :root[data-theme="dark"] .bg-white {
+    background-color: var(--planner-surface);
+  }
+
+  :root[data-theme="dark"] .bg-white\/70 {
+    background-color: color-mix(in srgb, var(--planner-surface) 70%, transparent);
+  }
+
+  :root[data-theme="dark"] .bg-white\/80 {
+    background-color: color-mix(in srgb, var(--planner-surface) 80%, transparent);
   }
 }
