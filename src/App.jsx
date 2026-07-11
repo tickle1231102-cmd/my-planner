@@ -1168,8 +1168,12 @@ function PlannerApp({ logout, deleteAccount, syncing, userKey, nickname, localOn
   }, [colorMenu, setDateColor])
 
   const changeWeek = useCallback((monday) => {
+    const weekYear = monday.getFullYear()
+    if (AVAILABLE_YEARS.includes(weekYear) && weekYear !== year) {
+      setYear(weekYear)
+    }
     setSelectedWeekMonday(monday)
-  }, [])
+  }, [year])
 
   const openWeek = useCallback((date) => {
     const dateYear = date.getFullYear()

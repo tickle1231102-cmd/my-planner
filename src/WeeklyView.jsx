@@ -1415,6 +1415,7 @@ function WeeklySidebarContent({
   memo,
   setMemo,
   onOpenHabit,
+  onSelectCalendarDate,
 }) {
   return (
     <>
@@ -1440,6 +1441,7 @@ function WeeklySidebarContent({
             checklistDateKeys={checklistDateKeys}
             today={today}
             compact={compact}
+            onSelectDate={onSelectCalendarDate}
           />
         </div>
       )}
@@ -1662,6 +1664,13 @@ export default function WeeklyView({
     [setWeekGoal],
   )
 
+  const handleSelectCalendarDate = useCallback(
+    (date) => {
+      onWeekChange?.(getMondayOfWeek(date))
+    },
+    [onWeekChange],
+  )
+
   const [paintColorId, setPaintColorId] = useState(DEFAULT_TIMETABLE_COLOR)
   const [timetableLocked, setTimetableLocked] = useState(true)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(true)
@@ -1834,6 +1843,7 @@ export default function WeeklyView({
             memo={weekData.memo}
             setMemo={setMemo}
             onOpenHabit={handleOpenHabit}
+            onSelectCalendarDate={handleSelectCalendarDate}
           />
         </aside>
 
@@ -1859,6 +1869,7 @@ export default function WeeklyView({
               memo={weekData.memo}
               setMemo={setMemo}
               onOpenHabit={handleOpenHabit}
+              onSelectCalendarDate={handleSelectCalendarDate}
             />
           </aside>
           <SidebarEdgeToggle

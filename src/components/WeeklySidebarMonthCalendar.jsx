@@ -9,6 +9,7 @@ export default function WeeklySidebarMonthCalendar({
   checklistDateKeys,
   today,
   compact = false,
+  onSelectDate,
 }) {
   const weekDateKeys = useMemo(
     () => new Set(weekDays.map((day) => toDateKey(day))),
@@ -40,19 +41,20 @@ export default function WeeklySidebarMonthCalendar({
           const inCurrentWeek = weekDateKeys.has(dateKey)
           const hasChecklist = checklistDateKeys.has(dateKey)
           const isToday = isSameDay(date, today)
+          const interactive = typeof onSelectDate === 'function'
 
-          return (
-            <div
-              key={dateKey}
-              className={[
-                'flex flex-col items-center justify-center rounded-md',
-                compact ? 'h-6 gap-0.5' : 'h-8 gap-1',
-                inCurrentWeek ? 'bg-planner-today/75' : '',
-                isToday && 'ring-1 ring-planner-today-ring/70',
-              ]
-                .filter(Boolean)
-                .join(' ')}
-            >
+          const className = [
+            'flex flex-col items-center justify-center rounded-md',
+            compact ? 'h-6 gap-0.5' : 'h-8 gap-1',
+            inCurrentWeek ? 'bg-planner-today/75' : '',
+            isToday && 'ring-1 ring-planner-today-ring/70',
+            interactive && 'cursor-pointer transition hover:bg-planner-sage-light/70',
+          ]
+            .filter(Boolean)
+            .join(' ')
+
+          const content = (
+            <>
               <span
                 className={[
                   'leading-none',
@@ -76,11 +78,28 @@ export default function WeeklySidebarMonthCalendar({
                   aria-hidden
                 />
               ) : (
-                <span
-                  className={compact ? 'h-1' : 'h-1.5'}
-                  aria-hidden
-                />
+                <span className={compact ? 'h-1' : 'h-1.5'} aria-hidden />
               )}
+            </>
+          )
+
+          if (interactive) {
+            return (
+              <button
+                key={dateKey}
+                type="button"
+                onClick={() => onSelectDate(date)}
+                className={className}
+                aria-label={`${date.getMonth() + 1}월 ${date.getDate()}일 주로 이동`}
+              >
+                {content}
+              </button>
+            )
+          }
+
+          return (
+            <div key={dateKey} className={className}>
+              {content}
             </div>
           )
         })}

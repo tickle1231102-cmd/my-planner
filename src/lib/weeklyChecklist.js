@@ -2,6 +2,9 @@ function pad(n) {
   return String(n).padStart(2, '0')
 }
 
+/** Matches WeeklyView TODO_TASK_COUNT (To do list only, not "Not to do"). */
+export const WEEKLY_TODO_TASK_COUNT = 6
+
 export function getMondayOfWeek(date) {
   const d = new Date(date)
   d.setHours(0, 0, 0, 0)
@@ -14,20 +17,50 @@ export function getWeekIdFromMonday(monday) {
   return `${monday.getFullYear()}-${pad(monday.getMonth() + 1)}-${pad(monday.getDate())}`
 }
 
+export function getDayIndexFromDate(date) {
+  return (date.getDay() + 6) % 7
+}
+
+function getDayTasksRaw(date, weeklyData) {
+  const monday = getMondayOfWeek(date)
+  const weekId = getWeekIdFromMonday(monday)
+  const dayIdx = getDayIndexFromDate(date)
+  const week = weeklyData?.[weekId]
+  const tasks = week?.dayTasks?.[dayIdx] ?? week?.dayTasks?.[String(dayIdx)]
+  return {
+    monday,
+    weekId,
+    dayIdx,
+    tasks: Array.isArray(tasks) ? tasks : [],
+  }
+}
+
+/** Filled To-do list items only (non-empty text), excluding Not-to-do slots. */
+export function getFilledTodoTasksForDate(date, weeklyData) {
+  const { weekId, dayIdx, tasks } = getDayTasksRaw(date, weeklyData)
+  const todos = tasks.slice(0, WEEKLY_TODO_TASK_COUNT)
+  return {
+    weekId,
+    dayIdx,
+    tasks: todos
+      .filter((task) => String(task?.text || '').trim())
+      .map((task, index) => ({
+        id: task.id || `task-${index}`,
+        text: String(task.text).trim(),
+        done: !!task.done,
+        postponed: !!task.postponed,
+      })),
+  }
+}
+
 function dayTasksHaveContent(tasks) {
   if (!Array.isArray(tasks)) return false
   return tasks.some((task) => String(task?.text || '').trim())
 }
 
 export function dateHasChecklistContent(date, weeklyData) {
-  const monday = getMondayOfWeek(date)
-  const weekId = getWeekIdFromMonday(monday)
-  const week = weeklyData?.[weekId]
-  if (!week) return false
-
-  const dayIdx = (date.getDay() + 6) % 7
-  const tasks = week.dayTasks?.[dayIdx] ?? week.dayTasks?.[String(dayIdx)]
-  return dayTasksHaveContent(tasks)
+  const { tasks } = getDayTasksRaw(date, weeklyData)
+  return dayTasksHaveContent(tasks.slice(0, WEEKLY_TODO_TASK_COUNT))
 }
 
 export function buildMonthCells(year, month) {

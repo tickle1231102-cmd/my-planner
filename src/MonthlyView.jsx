@@ -7,7 +7,12 @@ import { PlannerQuickNav } from './components/PlannerQuickNav.jsx'
 import { AccountButton } from './components/AccountButton.jsx'
 import MonthGoalChecklist from './components/MonthGoalChecklist.jsx'
 import { useCloudSync } from './context/CloudSyncContext.jsx'
-import { padMonthGoals } from './lib/goalLists.js'
+import { padMonthGoals, padWeekGoals } from './lib/goalLists.js'
+import {
+  getFilledTodoTasksForDate,
+  getMondayOfWeek,
+  getWeekIdFromMonday,
+} from './lib/weeklyChecklist.js'
 import {
   buildMonthGrid,
   getMonthEntry,
@@ -26,6 +31,47 @@ function isSameDay(year, month, day, today) {
     today.getFullYear() === year &&
     today.getMonth() === month &&
     today.getDate() === day
+  )
+}
+
+function getMondayForWeekRow(grid, rowIndex, year, month) {
+  const start = rowIndex * 7
+  for (let i = 0; i < 7; i += 1) {
+    const day = grid[start + i]
+    if (day) {
+      return getMondayOfWeek(new Date(year, month, day))
+    }
+  }
+  return null
+}
+
+function WeekSideCell({ monday, memo, goals, onMemoChange, onUpdateGoal }) {
+  if (!monday) {
+    return (
+      <div className="h-full min-h-0 border border-planner-sand/60 bg-planner-cream/30" />
+    )
+  }
+
+  return (
+    <div className="flex h-full min-h-0 flex-col border border-planner-sand/80 bg-planner-sage-light/35">
+      <div className="min-h-0 flex-[0.42] border-b border-planner-sand/60">
+        <ImeSafeTextarea
+          value={memo}
+          onChange={onMemoChange}
+          className="h-full min-h-0 w-full resize-none bg-transparent px-1 py-0.5 text-[9px] leading-snug text-planner-ink placeholder:text-planner-ink-muted/35 focus:outline-none focus:ring-1 focus:ring-inset focus:ring-planner-sage-muted/40 sm:px-1.5 sm:py-1 sm:text-[10px]"
+          placeholder=""
+          aria-label="주간 메모"
+        />
+      </div>
+      <div className="min-h-0 flex-[0.58] overflow-y-auto px-0.5 py-0.5 sm:px-1">
+        <MonthGoalChecklist
+          goals={goals}
+          onUpdateGoal={onUpdateGoal}
+          compact
+          placeholder=""
+        />
+      </div>
+    </div>
   )
 }
 
@@ -108,7 +154,38 @@ function MobileMonthStrip({ year, month, onSelectMonth }) {
   )
 }
 
-function DayCell({ day, year, month, note, today, onNoteChange, onOpenWeek }) {
+function DayTodoCheckbox({ checked, postponed, onChange }) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={[
+        'mt-0.5 flex size-3 shrink-0 items-center justify-center border transition',
+        postponed
+          ? 'border-planner-peach bg-planner-peach/25'
+          : checked
+            ? 'border-planner-sage bg-planner-sage'
+            : 'border-dashed border-planner-ink-muted/50 bg-white',
+      ].join(' ')}
+    >
+      {checked && (
+        <svg viewBox="0 0 12 12" className="size-2 text-white" fill="none" aria-hidden>
+          <path
+            d="M2.5 6.2 4.8 8.5 9.5 3.5"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      )}
+    </button>
+  )
+}
+
+function DayCell({ day, year, month, todos, today, onToggleTodo, onOpenWeek }) {
   if (!day) {
     return (
       <div className="h-full min-h-0 border border-planner-sand/60 bg-planner-cream/30" />
@@ -141,13 +218,28 @@ function DayCell({ day, year, month, note, today, onNoteChange, onOpenWeek }) {
       >
         {day}
       </button>
-      <ImeSafeTextarea
-        value={note}
-        onChange={onNoteChange}
-        className="min-h-0 flex-1 resize-none bg-transparent px-1 pb-1 pt-0 text-[10px] leading-snug text-planner-ink focus:outline-none focus:ring-1 focus:ring-inset focus:ring-planner-sage-muted/40 sm:px-1.5 sm:pb-1.5 sm:text-xs"
-        placeholder=""
-        aria-label={`${month + 1}월 ${day}일 메모`}
-      />
+      <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-1 pb-1 sm:px-1.5">
+        {todos.map((task) => (
+          <div key={task.id} className="flex items-start gap-1">
+            <DayTodoCheckbox
+              checked={task.done}
+              postponed={task.postponed}
+              onChange={(done) => onToggleTodo?.(task.id, { done, postponed: done ? false : task.postponed })}
+            />
+            <p
+              className={[
+                'min-w-0 flex-1 text-[9px] leading-snug text-planner-ink sm:text-[10px] lg:text-xs lg:leading-relaxed',
+                task.done && 'text-planner-ink-muted/70 line-through',
+                task.postponed && !task.done && 'text-planner-peach',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            >
+              {task.text}
+            </p>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -317,7 +409,8 @@ export default function MonthlyView({
 }) {
   const notesRef = useRef(null)
   const [mobileNotesOpen, setMobileNotesOpen] = useState(false)
-  const { monthEntry, setNotes, setDayNote } = useMonthlyPlanner(year, month)
+  const { monthEntry, setNotes } = useMonthlyPlanner(year, month)
+  const { weeklyData, updateWeekly } = useCloudSync()
 
   const goals = useMemo(
     () => padMonthGoals(monthGoals?.[year]?.[String(month)]),
@@ -326,6 +419,79 @@ export default function MonthlyView({
 
   const grid = useMemo(() => buildMonthGrid(year, month), [year, month])
   const rowCount = useMemo(() => Math.ceil(grid.length / 7), [grid.length])
+
+  const weekRows = useMemo(() => {
+    return Array.from({ length: rowCount }, (_, rowIndex) => {
+      const monday = getMondayForWeekRow(grid, rowIndex, year, month)
+      const weekId = monday ? getWeekIdFromMonday(monday) : null
+      const weekEntry = weekId ? weeklyData?.[weekId] : null
+      return {
+        monday,
+        weekId,
+        weekGoals: padWeekGoals(weekEntry?.weekGoals),
+        memo: typeof weekEntry?.memo === 'string' ? weekEntry.memo : '',
+      }
+    })
+  }, [grid, month, rowCount, weeklyData, year])
+
+  const handleWeekGoalUpdate = useCallback(
+    (weekId, goalId, updates) => {
+      if (!weekId) return
+      updateWeekly((prev) => {
+        const current = prev[weekId] || {}
+        const weekGoals = padWeekGoals(current.weekGoals).map((goal) =>
+          goal.id === goalId ? { ...goal, ...updates } : goal,
+        )
+        return {
+          ...prev,
+          [weekId]: { ...current, weekGoals },
+        }
+      })
+    },
+    [updateWeekly],
+  )
+
+  const handleWeekMemoChange = useCallback(
+    (weekId, memo) => {
+      if (!weekId) return
+      updateWeekly((prev) => {
+        const current = prev[weekId] || {}
+        return {
+          ...prev,
+          [weekId]: { ...current, memo },
+        }
+      })
+    },
+    [updateWeekly],
+  )
+
+  const handleDayTodoToggle = useCallback(
+    (date, taskId, updates) => {
+      const monday = getMondayOfWeek(date)
+      const weekId = getWeekIdFromMonday(monday)
+      const dayIdx = (date.getDay() + 6) % 7
+
+      updateWeekly((prev) => {
+        const current = prev[weekId] || {}
+        const dayTasks = { ...(current.dayTasks || {}) }
+        const list = Array.isArray(dayTasks[dayIdx])
+          ? dayTasks[dayIdx]
+          : Array.isArray(dayTasks[String(dayIdx)])
+            ? dayTasks[String(dayIdx)]
+            : []
+
+        dayTasks[dayIdx] = list.map((task) =>
+          task.id === taskId ? { ...task, ...updates } : task,
+        )
+
+        return {
+          ...prev,
+          [weekId]: { ...current, dayTasks },
+        }
+      })
+    },
+    [updateWeekly],
+  )
 
   const handleSelectMonth = useCallback(
     (nextMonth) => {
@@ -417,7 +583,10 @@ export default function MonthlyView({
           <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden lg:flex-row">
             <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-1 sm:p-2 lg:p-3">
               <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-planner-sand bg-white shadow-soft">
-                <div className="grid shrink-0 grid-cols-7 border-b border-planner-sand bg-planner-sage-light/50">
+                <div className="grid shrink-0 grid-cols-[minmax(72px,0.9fr)_repeat(7,minmax(0,1fr))] border-b border-planner-sand bg-planner-sage-light/50 sm:grid-cols-[minmax(88px,0.95fr)_repeat(7,minmax(0,1fr))]">
+                  <div className="border-r border-planner-sand/70 px-0.5 py-1 text-center text-[8px] font-semibold uppercase leading-tight tracking-[0.06em] text-planner-sage sm:py-1.5 sm:text-[9px] lg:py-2 lg:text-[10px]">
+                    Weekly goal
+                  </div>
                   {WEEKDAY_LABELS.map((label, index) => (
                     <div
                       key={label}
@@ -432,21 +601,48 @@ export default function MonthlyView({
                 </div>
 
                 <div
-                  className="grid min-h-0 flex-1 grid-cols-7"
+                  className="grid min-h-0 flex-1 grid-cols-[minmax(72px,0.9fr)_repeat(7,minmax(0,1fr))] sm:grid-cols-[minmax(88px,0.95fr)_repeat(7,minmax(0,1fr))]"
                   style={{ gridTemplateRows: `repeat(${rowCount}, minmax(0, 1fr))` }}
                 >
-                  {grid.map((day, index) => (
-                    <DayCell
-                      key={`${day ?? 'empty'}-${index}`}
-                      day={day}
-                      year={year}
-                      month={month}
-                      note={day ? monthEntry.dayNotes[String(day)] || '' : ''}
-                      today={today}
-                      onNoteChange={(value) => setDayNote(day, value)}
-                      onOpenWeek={onOpenWeek}
-                    />
-                  ))}
+                  {weekRows.map((weekRow, rowIndex) => {
+                    const start = rowIndex * 7
+                    return (
+                      <div key={weekRow.weekId || `week-${rowIndex}`} className="contents">
+                        <WeekSideCell
+                          monday={weekRow.monday}
+                          memo={weekRow.memo}
+                          goals={weekRow.weekGoals}
+                          onMemoChange={(value) =>
+                            handleWeekMemoChange(weekRow.weekId, value)
+                          }
+                          onUpdateGoal={(goalId, updates) =>
+                            handleWeekGoalUpdate(weekRow.weekId, goalId, updates)
+                          }
+                        />
+                        {grid.slice(start, start + 7).map((day, dayIndex) => {
+                          const date = day ? new Date(year, month, day) : null
+                          const filledTodos = date
+                            ? getFilledTodoTasksForDate(date, weeklyData).tasks
+                            : []
+
+                          return (
+                            <DayCell
+                              key={`${day ?? 'empty'}-${start + dayIndex}`}
+                              day={day}
+                              year={year}
+                              month={month}
+                              todos={filledTodos}
+                              today={today}
+                              onToggleTodo={(taskId, updates) =>
+                                date && handleDayTodoToggle(date, taskId, updates)
+                              }
+                              onOpenWeek={onOpenWeek}
+                            />
+                          )
+                        })}
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             </main>
