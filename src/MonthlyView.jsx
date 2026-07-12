@@ -162,7 +162,7 @@ function DayTodoCheckbox({ checked, postponed, onChange }) {
       aria-checked={checked}
       onClick={() => onChange(!checked)}
       className={[
-        'mt-0.5 flex size-3 shrink-0 items-center justify-center border transition',
+        'mt-0.5 flex size-2 shrink-0 items-center justify-center border transition sm:size-3',
         postponed
           ? 'border-planner-peach bg-planner-peach/25'
           : checked
@@ -171,7 +171,7 @@ function DayTodoCheckbox({ checked, postponed, onChange }) {
       ].join(' ')}
     >
       {checked && (
-        <svg viewBox="0 0 12 12" className="size-2 text-white" fill="none" aria-hidden>
+        <svg viewBox="0 0 12 12" className="size-1.5 text-white sm:size-2" fill="none" aria-hidden>
           <path
             d="M2.5 6.2 4.8 8.5 9.5 3.5"
             stroke="currentColor"
@@ -220,7 +220,7 @@ function DayCell({ day, year, month, todos, today, onToggleTodo, onOpenWeek }) {
       </button>
       <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-1 pb-1 sm:px-1.5">
         {todos.map((task) => (
-          <div key={task.id} className="flex items-start gap-1">
+          <div key={task.id} className="flex items-start gap-0.5 sm:gap-1">
             <DayTodoCheckbox
               checked={task.done}
               postponed={task.postponed}
@@ -228,7 +228,7 @@ function DayCell({ day, year, month, todos, today, onToggleTodo, onOpenWeek }) {
             />
             <p
               className={[
-                'min-w-0 flex-1 text-[9px] leading-snug text-planner-ink sm:text-[10px] lg:text-xs lg:leading-relaxed',
+                'min-w-0 flex-1 text-[5px] leading-snug text-planner-ink sm:text-[10px] lg:text-xs lg:leading-relaxed',
                 task.done && 'text-planner-ink-muted/70 line-through',
                 task.postponed && !task.done && 'text-planner-peach',
               ]
