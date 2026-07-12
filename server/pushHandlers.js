@@ -1,11 +1,19 @@
 import {
   formatApiError,
-  formatTimeFromDb,
   isMissingPushTableError,
   normalizeTimezone,
   parseNotifyTime,
   resolveAuthedProfile,
 } from './pushAuth.js'
+import {
+  countPushSubscriptions,
+  deletePushSubscriptions,
+  disablePushSettings,
+  hasPushDatabaseUrl,
+  loadPushSettings,
+  upsertPushSettings,
+  upsertPushSubscription,
+} from './pushDb.js'
 import { getVapidPublicKey } from './webPush.js'
 
 function pushTableMissingResponse() {
@@ -32,32 +40,11 @@ const DEFAULT_SETTINGS = {
   hasSubscription: false,
 }
 
-async function loadSettings(admin, userKey) {
-  const [
-    { data: settings, error: settingsError },
-    { data: subs, error: subError },
-  ] = await Promise.all([
-    admin
-      .from('push_settings')
-      .select('enabled, notify_time, timezone, last_notified_on')
-      .eq('user_key', userKey)
-      .maybeSingle(),
-    admin
-      .from('push_subscriptions')
-      .select('id')
-      .eq('user_key', userKey)
-      .limit(1),
-  ])
-
-  if (settingsError) throw settingsError
-  if (subError) throw subError
-
-  return {
-    enabled: Boolean(settings?.enabled),
-    notifyTime: formatTimeFromDb(settings?.notify_time),
-    timezone: settings?.timezone || 'Asia/Seoul',
-    lastNotifiedOn: settings?.last_notified_on || null,
-    hasSubscription: Boolean(subs?.length),
+function assertPushDbConfigured() {
+  if (!hasPushDatabaseUrl()) {
+    throw new Error(
+      'POSTGRES_URL이 없습니다. Vercel에 POSTGRES_URL 또는 POSTGRES_URL_NON_POOLING을 설정해 주세요.',
+    )
   }
 }
 
@@ -71,10 +58,11 @@ export async function handlePushVapidPublicKey() {
 
 export async function handlePushGetSettings(authHeader) {
   try {
+    assertPushDbConfigured()
     const resolved = await resolveAuthedProfile(authHeader)
     if (resolved.error) return resolved.error
 
-    const settings = await loadSettings(resolved.admin, resolved.profile.user_key)
+    const settings = await loadPushSettings(resolved.profile.user_key)
     return { status: 200, body: settings }
   } catch (error) {
     return failFromError(error)
@@ -83,6 +71,7 @@ export async function handlePushGetSettings(authHeader) {
 
 export async function handlePushUpdateSettings(authHeader, body) {
   try {
+    assertPushDbConfigured()
     const resolved = await resolveAuthedProfile(authHeader)
     if (resolved.error) return resolved.error
 
@@ -95,21 +84,12 @@ export async function handlePushUpdateSettings(authHeader, body) {
     const enabled =
       typeof body?.enabled === 'boolean' ? body.enabled : undefined
 
-    const current = await loadSettings(resolved.admin, resolved.profile.user_key)
-    const next = {
-      user_key: resolved.profile.user_key,
-      enabled: enabled ?? current.enabled,
-      notify_time: notifyTime || current.notifyTime,
-      timezone,
-    }
+    const current = await loadPushSettings(resolved.profile.user_key)
+    const nextEnabled = enabled ?? current.enabled
+    const nextNotifyTime = notifyTime || current.notifyTime
 
-    if (next.enabled) {
-      const { count, error: countError } = await resolved.admin
-        .from('push_subscriptions')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_key', resolved.profile.user_key)
-
-      if (countError) throw countError
+    if (nextEnabled) {
+      const count = await countPushSubscriptions(resolved.profile.user_key)
       if (!count) {
         return {
           status: 400,
@@ -118,13 +98,14 @@ export async function handlePushUpdateSettings(authHeader, body) {
       }
     }
 
-    const { error } = await resolved.admin
-      .from('push_settings')
-      .upsert(next, { onConflict: 'user_key' })
+    await upsertPushSettings({
+      userKey: resolved.profile.user_key,
+      enabled: nextEnabled,
+      notifyTime: nextNotifyTime,
+      timezone,
+    })
 
-    if (error) throw error
-
-    const settings = await loadSettings(resolved.admin, resolved.profile.user_key)
+    const settings = await loadPushSettings(resolved.profile.user_key)
     return { status: 200, body: settings }
   } catch (error) {
     return failFromError(error)
@@ -133,6 +114,7 @@ export async function handlePushUpdateSettings(authHeader, body) {
 
 export async function handlePushSubscribe(authHeader, body) {
   try {
+    assertPushDbConfigured()
     const resolved = await resolveAuthedProfile(authHeader)
     if (resolved.error) return resolved.error
 
@@ -148,32 +130,21 @@ export async function handlePushSubscribe(authHeader, body) {
     const notifyTime = parseNotifyTime(body?.notifyTime) || '21:00'
     const timezone = normalizeTimezone(body?.timezone)
 
-    const { error: subError } = await resolved.admin.from('push_subscriptions').upsert(
-      {
-        user_key: resolved.profile.user_key,
-        endpoint,
-        p256dh,
-        auth,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'endpoint' },
-    )
+    await upsertPushSubscription({
+      userKey: resolved.profile.user_key,
+      endpoint,
+      p256dh,
+      auth,
+    })
 
-    if (subError) throw subError
+    await upsertPushSettings({
+      userKey: resolved.profile.user_key,
+      enabled: true,
+      notifyTime,
+      timezone,
+    })
 
-    const { error: settingsError } = await resolved.admin.from('push_settings').upsert(
-      {
-        user_key: resolved.profile.user_key,
-        enabled: true,
-        notify_time: notifyTime,
-        timezone,
-      },
-      { onConflict: 'user_key' },
-    )
-
-    if (settingsError) throw settingsError
-
-    const settings = await loadSettings(resolved.admin, resolved.profile.user_key)
+    const settings = await loadPushSettings(resolved.profile.user_key)
     return { status: 200, body: settings }
   } catch (error) {
     return failFromError(error)
@@ -182,41 +153,18 @@ export async function handlePushSubscribe(authHeader, body) {
 
 export async function handlePushUnsubscribe(authHeader, body) {
   try {
+    assertPushDbConfigured()
     const resolved = await resolveAuthedProfile(authHeader)
     if (resolved.error) return resolved.error
 
-    const endpoint = body?.endpoint
-    if (endpoint) {
-      await resolved.admin
-        .from('push_subscriptions')
-        .delete()
-        .eq('user_key', resolved.profile.user_key)
-        .eq('endpoint', endpoint)
-    } else {
-      await resolved.admin
-        .from('push_subscriptions')
-        .delete()
-        .eq('user_key', resolved.profile.user_key)
-    }
+    await deletePushSubscriptions(resolved.profile.user_key, body?.endpoint)
 
-    const { count } = await resolved.admin
-      .from('push_subscriptions')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_key', resolved.profile.user_key)
-
+    const count = await countPushSubscriptions(resolved.profile.user_key)
     if (!count) {
-      await resolved.admin
-        .from('push_settings')
-        .upsert(
-          {
-            user_key: resolved.profile.user_key,
-            enabled: false,
-          },
-          { onConflict: 'user_key' },
-        )
+      await disablePushSettings(resolved.profile.user_key)
     }
 
-    const settings = await loadSettings(resolved.admin, resolved.profile.user_key)
+    const settings = await loadPushSettings(resolved.profile.user_key)
     return { status: 200, body: settings }
   } catch (error) {
     return failFromError(error)

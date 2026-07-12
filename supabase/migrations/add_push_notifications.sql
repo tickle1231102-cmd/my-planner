@@ -52,7 +52,10 @@ alter table public.push_subscriptions enable row level security;
 -- Access is via service-role API after JWT verification (same pattern as auth routes).
 -- No direct client policies needed beyond denying anon/authenticated table access by default.
 
-grant all on public.push_settings to service_role;
-grant all on public.push_subscriptions to service_role;
+grant all on public.push_settings to anon, authenticated, service_role;
+grant all on public.push_subscriptions to anon, authenticated, service_role;
 
+-- Force PostgREST to pick up the new tables (avoids PGRST205 schema cache errors).
+select pg_notification_queue_usage();
 notify pgrst, 'reload schema';
+notify pgrst, 'reload tables';

@@ -1,10 +1,17 @@
-import { getAdminClient } from './supabaseAdmin.js'
 import {
   countUncheckedTodos,
   getWeekIdAndDayIdxInTimeZone,
   isInNotifyWindow,
 } from './pushTime.js'
-import { formatTimeFromDb } from './pushAuth.js'
+import { formatApiError, formatTimeFromDb } from './pushAuth.js'
+import {
+  deletePushSubscriptionById,
+  hasPushDatabaseUrl,
+  listEnabledPushSettings,
+  listPushSubscriptions,
+  loadWeeklyData,
+  markPushNotified,
+} from './pushDb.js'
 import { sendPushNotification } from './webPush.js'
 
 function readHeader(req, name) {
@@ -54,15 +61,18 @@ export async function handlePushRemindersCron(req) {
   }
 
   try {
-    const admin = getAdminClient()
+    if (!hasPushDatabaseUrl()) {
+      return {
+        status: 503,
+        body: {
+          error:
+            'POSTGRES_URL이 없습니다. Vercel에 POSTGRES_URL 또는 POSTGRES_URL_NON_POOLING을 설정해 주세요.',
+        },
+      }
+    }
+
     const now = new Date()
-
-    const { data: settingsRows, error: settingsError } = await admin
-      .from('push_settings')
-      .select('user_key, notify_time, timezone, last_notified_on')
-      .eq('enabled', true)
-
-    if (settingsError) throw settingsError
+    const settingsRows = await listEnabledPushSettings()
 
     const results = {
       checked: 0,
@@ -83,26 +93,27 @@ export async function handlePushRemindersCron(req) {
         continue
       }
 
-      if (row.last_notified_on === zoned.dateKey) {
+      const lastNotified = row.last_notified_on
+        ? String(row.last_notified_on).slice(0, 10)
+        : null
+      if (lastNotified === zoned.dateKey) {
         results.skipped += 1
         continue
       }
 
       results.matched += 1
 
-      const { data: appData, error: appError } = await admin
-        .from('app_data')
-        .select('weekly_data')
-        .eq('user_key', row.user_key)
-        .maybeSingle()
-
-      if (appError) {
+      let weeklyData = {}
+      try {
+        weeklyData = await loadWeeklyData(row.user_key)
+      } catch (error) {
+        console.warn('[push-cron] weekly load failed', row.user_key, formatApiError(error))
         results.failed += 1
         continue
       }
 
       const { unchecked, total } = countUncheckedTodos(
-        appData?.weekly_data || {},
+        weeklyData,
         zoned.weekId,
         zoned.dayIdx,
       )
@@ -112,12 +123,11 @@ export async function handlePushRemindersCron(req) {
         continue
       }
 
-      const { data: subscriptions, error: subError } = await admin
-        .from('push_subscriptions')
-        .select('id, endpoint, p256dh, auth')
-        .eq('user_key', row.user_key)
-
-      if (subError) {
+      let subscriptions = []
+      try {
+        subscriptions = await listPushSubscriptions(row.user_key)
+      } catch (error) {
+        console.warn('[push-cron] subs load failed', row.user_key, formatApiError(error))
         results.failed += 1
         continue
       }
@@ -151,7 +161,7 @@ export async function handlePushRemindersCron(req) {
         } catch (error) {
           const statusCode = error?.statusCode || error?.status
           if (statusCode === 404 || statusCode === 410) {
-            await admin.from('push_subscriptions').delete().eq('id', sub.id)
+            await deletePushSubscriptionById(sub.id)
           } else {
             console.warn('[push-cron] send failed', row.user_key, error?.message || error)
           }
@@ -160,10 +170,7 @@ export async function handlePushRemindersCron(req) {
 
       if (delivered > 0) {
         results.sent += 1
-        await admin
-          .from('push_settings')
-          .update({ last_notified_on: zoned.dateKey })
-          .eq('user_key', row.user_key)
+        await markPushNotified(row.user_key, zoned.dateKey)
       } else {
         results.failed += 1
       }
@@ -171,7 +178,8 @@ export async function handlePushRemindersCron(req) {
 
     return { status: 200, body: { ok: true, ...results } }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'server error'
+    const message = formatApiError(error)
+    console.error('[push-cron]', message, error)
     return { status: 500, body: { error: message } }
   }
 }
