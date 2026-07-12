@@ -1,3 +1,28 @@
 {
-  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }]
+  "rewrites": [
+    {
+      "source": "/api/push/vapid-public-key",
+      "destination": "/api/push?r=vapid"
+    },
+    {
+      "source": "/api/push/settings",
+      "destination": "/api/push?r=settings"
+    },
+    {
+      "source": "/api/push/subscribe",
+      "destination": "/api/push?r=subscribe"
+    },
+    {
+      "source": "/api/push/unsubscribe",
+      "destination": "/api/push?r=unsubscribe"
+    },
+    {
+      "source": "/api/cron/push-reminders",
+      "destination": "/api/push?r=cron"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ]
 }
