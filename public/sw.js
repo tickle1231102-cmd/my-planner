@@ -1,4 +1,4 @@
-/* Focal Web Push service worker */
+/* Focal Web Push service worker — v2 */
 
 self.addEventListener('install', (event) => {
   self.skipWaiting()
@@ -7,6 +7,10 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim())
 })
+
+function weeklyUrl() {
+  return new URL('/?view=weekly', self.location.origin).href
+}
 
 self.addEventListener('push', (event) => {
   let data = {
@@ -29,6 +33,8 @@ self.addEventListener('push', (event) => {
     }
   }
 
+  const targetUrl = data.url || '/?view=weekly'
+
   event.waitUntil(
     self.registration.showNotification(data.title || 'Focal', {
       body: data.body,
@@ -36,7 +42,7 @@ self.addEventListener('push', (event) => {
       badge: '/icons/icon-192.png',
       tag: data.tag || 'focal-reminder',
       renotify: true,
-      data: { url: data.url || '/?view=weekly' },
+      data: { url: targetUrl },
     }),
   )
 })
@@ -54,13 +60,32 @@ self.addEventListener('notificationclick', (event) => {
       })
 
       for (const client of clientList) {
+        try {
+          const clientUrl = new URL(client.url)
+          if (clientUrl.origin !== self.location.origin) continue
+        } catch {
+          continue
+        }
+
+        // Ask the open app to hard-navigate to Weekly (SPA focus alone keeps old view).
+        client.postMessage({
+          type: 'FOCAL_OPEN_WEEKLY',
+          url: absoluteUrl,
+        })
+
         if ('focus' in client) {
           await client.focus()
-          if ('navigate' in client) {
-            await client.navigate(absoluteUrl)
-          }
-          return
         }
+
+        if ('navigate' in client) {
+          try {
+            await client.navigate(absoluteUrl)
+          } catch {
+            // iOS / some PWAs do not support navigate(); postMessage handles it.
+          }
+        }
+
+        return
       }
 
       if (self.clients.openWindow) {
