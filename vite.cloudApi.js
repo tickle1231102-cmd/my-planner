@@ -10,6 +10,14 @@ import {
 import { getSupabaseEnvIssue } from './server/supabaseEnv.js'
 import { handleClassifyMemoRequest } from './server/classifyMemo.js'
 import { handleDataRequest } from './server/cloudData.js'
+import {
+  handlePushGetSettings,
+  handlePushSubscribe,
+  handlePushUnsubscribe,
+  handlePushUpdateSettings,
+  handlePushVapidPublicKey,
+} from './server/pushHandlers.js'
+import { handlePushRemindersCron } from './server/pushReminders.js'
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -104,6 +112,51 @@ export function cloudApiDevPlugin() {
             const result = await handleClassifyMemoRequest(body)
             sendJson(res, result.status, result.body)
             return
+          }
+
+          if (req.url?.startsWith('/api/push/vapid-public-key') && req.method === 'GET') {
+            const result = await handlePushVapidPublicKey()
+            sendJson(res, result.status, result.body)
+            return
+          }
+
+          if (req.url?.startsWith('/api/push/settings')) {
+            if (req.method === 'GET') {
+              const result = await handlePushGetSettings(req.headers.authorization)
+              sendJson(res, result.status, result.body)
+              return
+            }
+            if (req.method === 'POST') {
+              const body = await readBody(req)
+              const result = await handlePushUpdateSettings(
+                req.headers.authorization,
+                body,
+              )
+              sendJson(res, result.status, result.body)
+              return
+            }
+          }
+
+          if (req.url?.startsWith('/api/push/subscribe') && req.method === 'POST') {
+            const body = await readBody(req)
+            const result = await handlePushSubscribe(req.headers.authorization, body)
+            sendJson(res, result.status, result.body)
+            return
+          }
+
+          if (req.url?.startsWith('/api/push/unsubscribe') && req.method === 'POST') {
+            const body = await readBody(req)
+            const result = await handlePushUnsubscribe(req.headers.authorization, body)
+            sendJson(res, result.status, result.body)
+            return
+          }
+
+          if (req.url?.startsWith('/api/cron/push-reminders')) {
+            if (req.method === 'GET' || req.method === 'POST') {
+              const result = await handlePushRemindersCron(req)
+              sendJson(res, result.status, result.body)
+              return
+            }
           }
 
           if (!req.url?.startsWith('/api/data')) return next()
