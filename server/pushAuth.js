@@ -89,6 +89,18 @@ export function isMissingPushTableError(message) {
     text.includes('push_settings') ||
     text.includes('push_subscriptions') ||
     text.includes('schema cache') ||
-    text.includes('does not exist')
+    text.includes('does not exist') ||
+    text.includes('42p01')
   )
+}
+
+export function getSupabaseProjectRef() {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || ''
+  try {
+    const host = new URL(url).hostname
+    const ref = host.split('.')[0]
+    return ref && ref !== 'xxxx' ? ref : ''
+  } catch {
+    return ''
+  }
 }

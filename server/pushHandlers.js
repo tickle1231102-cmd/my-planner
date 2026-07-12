@@ -1,5 +1,6 @@
 import {
   formatApiError,
+  getSupabaseProjectRef,
   isMissingPushTableError,
   normalizeTimezone,
   parseNotifyTime,
@@ -17,11 +18,15 @@ import {
 import { getVapidPublicKey } from './webPush.js'
 
 function pushTableMissingResponse() {
+  const ref = getSupabaseProjectRef()
+  const projectHint = ref
+    ? `지금 앱이 쓰는 Supabase 프로젝트는 "${ref}" 입니다. 대시보드 왼쪽 위에서 이 프로젝트를 선택한 뒤 SQL을 실행하세요.`
+    : 'Supabase 대시보드에서 이 웹사이트와 연결된 프로젝트를 선택한 뒤 SQL을 실행하세요.'
+
   return {
     status: 503,
     body: {
-      error:
-        '푸시 테이블을 찾을 수 없습니다. Supabase SQL Editor에서 add_push_notifications.sql 을 다시 실행한 뒤, 몇 분 후 재시도해 주세요.',
+      error: `푸시 테이블이 앱 DB에 없습니다. ${projectHint} (다른 프로젝트에 실행하면 이 오류가 계속 납니다.)`,
     },
   }
 }
