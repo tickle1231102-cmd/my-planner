@@ -113,12 +113,3 @@
     background-color: color-mix(in srgb, var(--planner-surface) 80%, transparent);
   }
 }
-
-/* iOS Safari zooms focused inputs under 16px — keep scale stable on mobile. */
-@media (hover: none) and (pointer: coarse) {
-  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='hidden']),
-  textarea,
-  select {
-    font-size: 16px !important;
-  }
-}
