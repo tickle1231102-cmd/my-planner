@@ -41,7 +41,7 @@ async function pushFetch(path, { method = 'GET', body } = {}) {
   })
   const payload = await response.json().catch(() => ({}))
   if (!response.ok) {
-    throw new Error(payload.error || '푸시 API 요청에 실패했습니다')
+    throw new Error(payload.error || payload.hint || '푸시 API 요청에 실패했습니다')
   }
   return payload
 }
@@ -79,18 +79,11 @@ export async function registerPushServiceWorker() {
 }
 
 export async function fetchPushSettings() {
-  try {
-    return await pushFetch('/api/push/settings')
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('푸시 테이블')) {
-      throw error
-    }
-    throw error
-  }
+  return pushFetch('/api/push?r=settings')
 }
 
 export async function updatePushSettings({ enabled, notifyTime, timezone }) {
-  return pushFetch('/api/push/settings', {
+  return pushFetch('/api/push?r=settings', {
     method: 'POST',
     body: {
       enabled,
@@ -101,7 +94,7 @@ export async function updatePushSettings({ enabled, notifyTime, timezone }) {
 }
 
 async function fetchVapidPublicKey() {
-  const response = await fetch('/api/push/vapid-public-key')
+  const response = await fetch('/api/push?r=vapid')
   const payload = await response.json().catch(() => ({}))
   if (!response.ok || !payload.publicKey) {
     throw new Error(payload.error || 'VAPID 공개키가 설정되지 않았습니다')
@@ -144,7 +137,7 @@ export async function enablePushNotifications({ notifyTime }) {
 
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Seoul'
 
-  return pushFetch('/api/push/subscribe', {
+  return pushFetch('/api/push?r=subscribe', {
     method: 'POST',
     body: {
       subscription: subscription.toJSON(),
@@ -166,7 +159,7 @@ export async function disablePushNotifications() {
     // still disable server-side
   }
 
-  return pushFetch('/api/push/unsubscribe', {
+  return pushFetch('/api/push?r=unsubscribe', {
     method: 'POST',
     body: { endpoint },
   })

@@ -120,6 +120,49 @@ export function cloudApiDevPlugin() {
             return
           }
 
+          if (req.url?.startsWith('/api/push?') || req.url === '/api/push' || req.url?.startsWith('/api/push&')) {
+            const url = new URL(req.url, 'http://localhost')
+            const route = url.searchParams.get('r')
+            if (route === 'vapid' && req.method === 'GET') {
+              const result = await handlePushVapidPublicKey()
+              sendJson(res, result.status, result.body)
+              return
+            }
+            if (route === 'settings') {
+              if (req.method === 'GET') {
+                const result = await handlePushGetSettings(req.headers.authorization)
+                sendJson(res, result.status, result.body)
+                return
+              }
+              if (req.method === 'POST') {
+                const body = await readBody(req)
+                const result = await handlePushUpdateSettings(
+                  req.headers.authorization,
+                  body,
+                )
+                sendJson(res, result.status, result.body)
+                return
+              }
+            }
+            if (route === 'subscribe' && req.method === 'POST') {
+              const body = await readBody(req)
+              const result = await handlePushSubscribe(req.headers.authorization, body)
+              sendJson(res, result.status, result.body)
+              return
+            }
+            if (route === 'unsubscribe' && req.method === 'POST') {
+              const body = await readBody(req)
+              const result = await handlePushUnsubscribe(req.headers.authorization, body)
+              sendJson(res, result.status, result.body)
+              return
+            }
+            if (route === 'cron' && (req.method === 'GET' || req.method === 'POST')) {
+              const result = await handlePushRemindersCron(req)
+              sendJson(res, result.status, result.body)
+              return
+            }
+          }
+
           if (req.url?.startsWith('/api/push/settings')) {
             if (req.method === 'GET') {
               const result = await handlePushGetSettings(req.headers.authorization)

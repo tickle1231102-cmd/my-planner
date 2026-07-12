@@ -7,18 +7,50 @@ import {
 import { formatTimeFromDb } from './pushAuth.js'
 import { sendPushNotification } from './webPush.js'
 
-function isAuthorizedCron(req) {
-  const secret = process.env.CRON_SECRET?.trim()
-  if (!secret) return process.env.NODE_ENV !== 'production'
+function readHeader(req, name) {
+  const value = req.headers?.[name] ?? req.headers?.[name.toLowerCase()]
+  if (Array.isArray(value)) return String(value[0] || '').trim()
+  return String(value || '').trim()
+}
 
-  const auth = req.headers?.authorization || ''
-  const headerSecret = req.headers?.['x-cron-secret']
-  return auth === `Bearer ${secret}` || headerSecret === secret
+function authorizeCron(req) {
+  const secret = process.env.CRON_SECRET?.trim()
+  if (!secret) {
+    return {
+      ok: false,
+      status: 503,
+      body: {
+        error: 'CRON_SECRET is not configured on Vercel',
+        hint: 'Vercel → Settings → Environment Variables 에 CRON_SECRET 을 추가한 뒤 Redeploy 하세요.',
+      },
+    }
+  }
+
+  const auth = readHeader(req, 'authorization')
+  const headerSecret = readHeader(req, 'x-cron-secret')
+  const ok =
+    auth === `Bearer ${secret}` ||
+    auth === secret ||
+    headerSecret === secret
+
+  if (!ok) {
+    return {
+      ok: false,
+      status: 401,
+      body: {
+        error: 'unauthorized',
+        hint: 'cron-job.org 작업의 Request Headers 에 Name=Authorization, Value=Bearer <Vercel CRON_SECRET> 을 넣으세요. (Bearer 뒤 공백 1칸)',
+      },
+    }
+  }
+
+  return { ok: true }
 }
 
 export async function handlePushRemindersCron(req) {
-  if (!isAuthorizedCron(req)) {
-    return { status: 401, body: { error: 'unauthorized' } }
+  const auth = authorizeCron(req)
+  if (!auth.ok) {
+    return { status: auth.status, body: auth.body }
   }
 
   try {

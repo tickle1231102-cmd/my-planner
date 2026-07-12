@@ -1,10 +1,29 @@
 import {
+  formatApiError,
   formatTimeFromDb,
+  isMissingPushTableError,
   normalizeTimezone,
   parseNotifyTime,
   resolveAuthedProfile,
 } from './pushAuth.js'
 import { getVapidPublicKey } from './webPush.js'
+
+function pushTableMissingResponse() {
+  return {
+    status: 503,
+    body: {
+      error:
+        '푸시 테이블을 찾을 수 없습니다. Supabase SQL Editor에서 add_push_notifications.sql 을 다시 실행한 뒤, 몇 분 후 재시도해 주세요.',
+    },
+  }
+}
+
+function failFromError(error) {
+  const message = formatApiError(error)
+  console.error('[push]', message, error)
+  if (isMissingPushTableError(message)) return pushTableMissingResponse()
+  return { status: 500, body: { error: message } }
+}
 
 const DEFAULT_SETTINGS = {
   enabled: false,
@@ -14,7 +33,10 @@ const DEFAULT_SETTINGS = {
 }
 
 async function loadSettings(admin, userKey) {
-  const [{ data: settings }, { data: subs, error: subError }] = await Promise.all([
+  const [
+    { data: settings, error: settingsError },
+    { data: subs, error: subError },
+  ] = await Promise.all([
     admin
       .from('push_settings')
       .select('enabled, notify_time, timezone, last_notified_on')
@@ -27,6 +49,7 @@ async function loadSettings(admin, userKey) {
       .limit(1),
   ])
 
+  if (settingsError) throw settingsError
   if (subError) throw subError
 
   return {
@@ -54,17 +77,7 @@ export async function handlePushGetSettings(authHeader) {
     const settings = await loadSettings(resolved.admin, resolved.profile.user_key)
     return { status: 200, body: settings }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'server error'
-    if (message.includes('push_settings') || message.includes('schema cache')) {
-      return {
-        status: 503,
-        body: {
-          error:
-            '푸시 테이블이 없습니다. Supabase에서 supabase/migrations/add_push_notifications.sql 을 실행해 주세요.',
-        },
-      }
-    }
-    return { status: 500, body: { error: message } }
+    return failFromError(error)
   }
 }
 
@@ -114,8 +127,7 @@ export async function handlePushUpdateSettings(authHeader, body) {
     const settings = await loadSettings(resolved.admin, resolved.profile.user_key)
     return { status: 200, body: settings }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'server error'
-    return { status: 500, body: { error: message } }
+    return failFromError(error)
   }
 }
 
@@ -164,8 +176,7 @@ export async function handlePushSubscribe(authHeader, body) {
     const settings = await loadSettings(resolved.admin, resolved.profile.user_key)
     return { status: 200, body: settings }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'server error'
-    return { status: 500, body: { error: message } }
+    return failFromError(error)
   }
 }
 
@@ -208,8 +219,7 @@ export async function handlePushUnsubscribe(authHeader, body) {
     const settings = await loadSettings(resolved.admin, resolved.profile.user_key)
     return { status: 200, body: settings }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'server error'
-    return { status: 500, body: { error: message } }
+    return failFromError(error)
   }
 }
 

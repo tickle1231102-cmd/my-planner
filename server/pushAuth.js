@@ -69,3 +69,26 @@ export function formatTimeFromDb(value) {
   }
   return '21:00'
 }
+
+export function formatApiError(error) {
+  if (!error) return 'server error'
+  if (typeof error === 'string') return error
+  if (error instanceof Error && error.message) return error.message
+  if (typeof error.message === 'string' && error.message) return error.message
+  if (typeof error.error === 'string' && error.error) return error.error
+  try {
+    return JSON.stringify(error)
+  } catch {
+    return 'server error'
+  }
+}
+
+export function isMissingPushTableError(message) {
+  const text = String(message || '').toLowerCase()
+  return (
+    text.includes('push_settings') ||
+    text.includes('push_subscriptions') ||
+    text.includes('schema cache') ||
+    text.includes('does not exist')
+  )
+}

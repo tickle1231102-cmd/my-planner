@@ -8,9 +8,12 @@ import {
 import { handlePushRemindersCron } from '../server/pushReminders.js'
 
 function getRoute(req) {
+  const fromQuery = req.query?.r
+  if (fromQuery) return String(fromQuery)
+
   const url = new URL(req.url || '/', 'http://localhost')
-  const fromQuery = url.searchParams.get('r')
-  if (fromQuery) return fromQuery
+  const fromSearch = url.searchParams.get('r')
+  if (fromSearch) return fromSearch
 
   const path = url.pathname.replace(/\/+$/, '')
   if (path.endsWith('/vapid-public-key')) return 'vapid'
