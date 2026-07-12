@@ -1,12 +1,17 @@
 import webpush from 'web-push'
 import { SUPPORT_EMAIL } from '../src/lib/supportContact.js'
 
+function readEnv(name) {
+  const value = process.env[name]
+  return typeof value === 'string' ? value.trim() : ''
+}
+
 export function getVapidPublicKey() {
-  return process.env.VAPID_PUBLIC_KEY?.trim() || ''
+  return readEnv('VAPID_PUBLIC_KEY') || readEnv('VITE_VAPID_PUBLIC_KEY')
 }
 
 export function getVapidPrivateKey() {
-  return process.env.VAPID_PRIVATE_KEY?.trim() || ''
+  return readEnv('VAPID_PRIVATE_KEY')
 }
 
 export function configureWebPush() {

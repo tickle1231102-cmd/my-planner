@@ -94,10 +94,13 @@ export async function updatePushSettings({ enabled, notifyTime, timezone }) {
 }
 
 async function fetchVapidPublicKey() {
-  const response = await fetch('/api/push?r=vapid')
+  const response = await fetch('/api/push?r=vapid', { cache: 'no-store' })
   const payload = await response.json().catch(() => ({}))
   if (!response.ok || !payload.publicKey) {
-    throw new Error(payload.error || 'VAPID 공개키가 설정되지 않았습니다')
+    throw new Error(
+      payload.error ||
+        'VAPID 공개키가 설정되지 않았습니다. Vercel에 VAPID_PUBLIC_KEY를 넣고 Redeploy 했는지 확인해 주세요.',
+    )
   }
   return payload.publicKey
 }
