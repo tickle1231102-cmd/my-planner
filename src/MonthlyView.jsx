@@ -68,6 +68,7 @@ function WeekSideCell({ monday, memo, goals, onMemoChange, onUpdateGoal }) {
           goals={goals}
           onUpdateGoal={onUpdateGoal}
           compact
+          micro
           placeholder=""
         />
       </div>
