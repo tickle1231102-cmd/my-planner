@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { formatDateLabel } from './lib/dateFormat.js'
 import { padMonthGoals, padYearGoals } from './lib/goalLists.js'
 import MonthGoalChecklist from './components/MonthGoalChecklist.jsx'
+import { ImeSafeTextarea } from './components/ImeSafeTextarea.jsx'
 
 const MONTH_LABELS = [
   '1월', '2월', '3월', '4월', '5월', '6월',
@@ -101,8 +102,10 @@ export default function YearOverviewCalendar({
   onDateSelect,
   monthGoals,
   yearGoals,
+  yearMemo = '',
   onUpdateMonthGoal,
   onUpdateYearGoal,
+  onUpdateYearMemo,
 }) {
   const annualGoals = useMemo(() => padYearGoals(yearGoals), [yearGoals])
 
@@ -122,6 +125,18 @@ export default function YearOverviewCalendar({
             placeholder="연간 목표"
             onUpdateGoal={onUpdateYearGoal}
           />
+          <div className="mt-3 border-t border-planner-sand pt-3">
+            <h3 className="mb-2 text-center text-sm font-bold tracking-wide text-planner-ink">
+              메모
+            </h3>
+            <ImeSafeTextarea
+              value={yearMemo}
+              onChange={(value) => onUpdateYearMemo?.(value)}
+              rows={6}
+              placeholder="올해 자유롭게 적어 보세요"
+              className="min-h-[7.5rem] w-full resize-y rounded-lg border border-planner-sand/80 bg-white px-2.5 py-2 text-xs leading-relaxed text-planner-ink placeholder:text-planner-ink-muted/45 focus:border-planner-sage-muted focus:outline-none focus:ring-1 focus:ring-planner-sage-light"
+            />
+          </div>
         </aside>
 
         <div className="min-w-0 flex-1">

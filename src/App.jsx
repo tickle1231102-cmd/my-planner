@@ -142,6 +142,7 @@ function usePlannerStorage(year) {
   const [dateColors, setDateColors] = useState(() => annualData.dateColors || {})
   const [monthGoals, setMonthGoals] = useState(() => annualData.monthGoals || {})
   const [yearGoals, setYearGoals] = useState(() => annualData.yearGoals || {})
+  const [yearMemos, setYearMemos] = useState(() => annualData.yearMemos || {})
   const snapshotRef = useRef({
     year,
     columns,
@@ -149,6 +150,7 @@ function usePlannerStorage(year) {
     dateColors,
     monthGoals,
     yearGoals,
+    yearMemos,
   })
 
   snapshotRef.current = {
@@ -158,6 +160,7 @@ function usePlannerStorage(year) {
     dateColors,
     monthGoals,
     yearGoals,
+    yearMemos,
   }
 
   useEffect(() => {
@@ -167,6 +170,7 @@ function usePlannerStorage(year) {
     setDateColors(annualData.dateColors || {})
     setMonthGoals(annualData.monthGoals || {})
     setYearGoals(annualData.yearGoals || {})
+    setYearMemos(annualData.yearMemos || {})
     hydratedRef.current = true
   }, [ready, annualData])
 
@@ -178,7 +182,7 @@ function usePlannerStorage(year) {
     }, DRAFT_DEBOUNCE_MS)
 
     return () => clearTimeout(timer)
-  }, [year, columns, weekData, dateColors, monthGoals, yearGoals, ready, updateAnnual])
+  }, [year, columns, weekData, dateColors, monthGoals, yearGoals, yearMemos, ready, updateAnnual])
 
   useEffect(() => {
     return () => {
@@ -255,16 +259,25 @@ function usePlannerStorage(year) {
     })
   }, [])
 
+  const updateYearMemo = useCallback((goalYear, memo) => {
+    setYearMemos((prev) => ({
+      ...prev,
+      [goalYear]: memo,
+    }))
+  }, [])
+
   return {
     columns,
     weekData,
     dateColors,
     monthGoals,
     yearGoals,
+    yearMemos,
     updateCell,
     setDateColor,
     updateMonthGoal,
     updateYearGoal,
+    updateYearMemo,
     addColumn,
     removeColumn,
   }
@@ -1128,7 +1141,7 @@ function PlannerApp({ logout, deleteAccount, syncing, userKey, nickname, localOn
   const weeks = useMemo(() => generateWeeks(year), [year])
   const monthSpans = useMemo(() => buildMonthSpans(weeks), [weeks])
 
-  const { columns, weekData, dateColors, monthGoals, yearGoals, updateCell, setDateColor, updateMonthGoal, updateYearGoal, addColumn, removeColumn } =
+  const { columns, weekData, dateColors, monthGoals, yearGoals, yearMemos, updateCell, setDateColor, updateMonthGoal, updateYearGoal, updateYearMemo, addColumn, removeColumn } =
     usePlannerStorage(year)
 
   const hasScrolledRef = useRef(false)
@@ -1554,12 +1567,14 @@ function PlannerApp({ logout, deleteAccount, syncing, userKey, nickname, localOn
               onDateSelect={openWeek}
               monthGoals={monthGoals[year] || {}}
               yearGoals={yearGoals[year]}
+              yearMemo={yearMemos[year] || ''}
               onUpdateMonthGoal={(month, goalId, updates) =>
                 updateMonthGoal(year, month, goalId, updates)
               }
               onUpdateYearGoal={(goalId, updates) =>
                 updateYearGoal(year, goalId, updates)
               }
+              onUpdateYearMemo={(memo) => updateYearMemo(year, memo)}
             />
           ) : view === 'mandala' ? (
             <MandalartView />

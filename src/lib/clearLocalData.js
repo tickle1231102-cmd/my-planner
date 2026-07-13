@@ -28,6 +28,7 @@ export function createFreshPlannerState() {
       dateColors: {},
       monthGoals: {},
       yearGoals: {},
+      yearMemos: {},
     },
     weeklyData: {},
     habitData: {},

@@ -79,6 +79,7 @@ function withDefaultAnnual(annual) {
     dateColors: annual?.dateColors || {},
     monthGoals: annual?.monthGoals || {},
     yearGoals: annual?.yearGoals || {},
+    yearMemos: annual?.yearMemos || {},
     year: annual?.year,
   }
 }
