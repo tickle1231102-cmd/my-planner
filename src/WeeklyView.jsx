@@ -130,6 +130,47 @@ function padDayTasks(tasks) {
   }))
 }
 
+function isTaskSlotEmpty(task) {
+  return !String(task?.text || '').trim() && !task?.done && !task?.postponed
+}
+
+function findEmptyTaskSlot(tasks, sourceIndex) {
+  const inTodo = sourceIndex < TODO_TASK_COUNT
+  const rangeStart = inTodo ? 0 : TODO_TASK_COUNT
+  const rangeEnd = inTodo ? TODO_TASK_COUNT : DAY_TASK_LINES
+
+  for (let i = rangeStart; i < rangeEnd; i += 1) {
+    if (isTaskSlotEmpty(tasks[i])) return i
+  }
+  for (let i = 0; i < tasks.length; i += 1) {
+    if (isTaskSlotEmpty(tasks[i])) return i
+  }
+  return -1
+}
+
+/** Copy postponed task text into the next day's first empty checklist slot. */
+function copyPostponedTaskToDay(tasks, source, sourceIndex) {
+  const text = String(source?.text || '').trim()
+  if (!text) return tasks
+
+  const alreadyExists = tasks.some(
+    (task) => String(task?.text || '').trim() === text && !task.done,
+  )
+  if (alreadyExists) return tasks
+
+  const emptyIndex = findEmptyTaskSlot(tasks, sourceIndex)
+  if (emptyIndex < 0) return tasks
+
+  const next = [...tasks]
+  next[emptyIndex] = {
+    ...next[emptyIndex],
+    text: source.text,
+    done: false,
+    postponed: false,
+  }
+  return next
+}
+
 function defaultDayNotes() {
   return Object.fromEntries(Array.from({ length: 7 }, (_, i) => [i, '']))
 }
@@ -274,7 +315,7 @@ function normalizeWeekData(raw) {
   }
 }
 
-function useWeeklyStorage(weekId) {
+function useWeeklyStorage(weekId, weekMonday) {
   const { weeklyData, updateWeekly } = useCloudSync()
   const remoteWeek = useMemo(
     () => normalizeWeekData(weeklyData[weekId]),
@@ -402,6 +443,85 @@ function useWeeklyStorage(weekId) {
     [setWeekData],
   )
 
+  const postponeDayTask = useCallback(
+    (dayIdx, taskId) => {
+      let sourceForNextWeek = null
+      let sourceIndexForNextWeek = -1
+
+      setWeekData((prev) => {
+        const fromTasks = padDayTasks(prev.dayTasks[dayIdx])
+        const fromIndex = fromTasks.findIndex((task) => task.id === taskId)
+        if (fromIndex < 0) return prev
+
+        const source = fromTasks[fromIndex]
+        fromTasks[fromIndex] = {
+          ...source,
+          postponed: true,
+          done: false,
+        }
+
+        if (dayIdx < 6) {
+          const toDayIdx = dayIdx + 1
+          const toTasks = copyPostponedTaskToDay(
+            padDayTasks(prev.dayTasks[toDayIdx]),
+            source,
+            fromIndex,
+          )
+          return {
+            ...prev,
+            dayTasks: {
+              ...prev.dayTasks,
+              [dayIdx]: fromTasks,
+              [toDayIdx]: toTasks,
+            },
+          }
+        }
+
+        sourceForNextWeek = source
+        sourceIndexForNextWeek = fromIndex
+        return {
+          ...prev,
+          dayTasks: {
+            ...prev.dayTasks,
+            [dayIdx]: fromTasks,
+          },
+        }
+      })
+
+      if (
+        dayIdx === 6 &&
+        sourceForNextWeek &&
+        String(sourceForNextWeek.text || '').trim() &&
+        weekMonday
+      ) {
+        const nextMonday = new Date(weekMonday)
+        nextMonday.setDate(nextMonday.getDate() + 7)
+        nextMonday.setHours(0, 0, 0, 0)
+        const nextWeekId = getWeekIdFromMonday(nextMonday)
+
+        updateWeekly((prev) => {
+          const nextWeek = normalizeWeekData(prev[nextWeekId])
+          const toTasks = copyPostponedTaskToDay(
+            [...nextWeek.dayTasks[0]],
+            sourceForNextWeek,
+            sourceIndexForNextWeek,
+          )
+          return {
+            ...prev,
+            [nextWeekId]: {
+              ...nextWeek,
+              dayTasks: {
+                ...nextWeek.dayTasks,
+                0: toTasks,
+              },
+            },
+          }
+        })
+      }
+    },
+    [setWeekData, updateWeekly, weekMonday],
+  )
+
   return {
     weekData,
     setWeekGoal,
@@ -410,6 +530,7 @@ function useWeeklyStorage(weekId) {
     setDayTask,
     setSlotFilled,
     moveDayTask,
+    postponeDayTask,
   }
 }
 
@@ -1625,8 +1746,16 @@ export default function WeeklyView({
   const weekId = useMemo(() => getWeekIdFromMonday(weekMonday), [weekMonday])
   const days = useMemo(() => getWeekDays(weekMonday), [weekMonday])
   const { weeklyData } = useCloudSync()
-  const { weekData, setWeekGoal, setMemo, setDayNote, setDayTask, setSlotFilled, moveDayTask } =
-    useWeeklyStorage(weekId)
+  const {
+    weekData,
+    setWeekGoal,
+    setMemo,
+    setDayNote,
+    setDayTask,
+    setSlotFilled,
+    moveDayTask,
+    postponeDayTask,
+  } = useWeeklyStorage(weekId, weekMonday)
   const { routines, setRoutines } = useTimetableRoutines()
 
   const displayFilledSlots = useMemo(() => {
@@ -1705,12 +1834,9 @@ export default function WeeklyView({
 
   const applyPostpone = useCallback(() => {
     if (!postponeMenu) return
-    setDayTask(postponeMenu.dayIdx, postponeMenu.taskId, {
-      postponed: true,
-      done: false,
-    })
+    postponeDayTask(postponeMenu.dayIdx, postponeMenu.taskId)
     setPostponeMenu(null)
-  }, [postponeMenu, setDayTask])
+  }, [postponeMenu, postponeDayTask])
 
   const handleStartTouchDrag = useCallback((payload) => {
     touchDragMetaRef.current = {
