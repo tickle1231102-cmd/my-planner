@@ -184,6 +184,14 @@ export function deleteMemoInData(data, id) {
   }
 }
 
+export function deleteMemosInData(data, ids) {
+  const idSet = new Set(Array.isArray(ids) ? ids : [ids])
+  const memos = withDefaultMemory(data).memos
+  return {
+    memos: memos.filter((memo) => !idSet.has(memo.id)),
+  }
+}
+
 export function countMemosByCategory(memos) {
   return memos.reduce((acc, memo) => {
     const slug = getEffectiveCategorySlug(memo)

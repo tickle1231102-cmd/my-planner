@@ -8,6 +8,7 @@ import {
   countMemosByCategory,
   createMemoInData,
   deleteMemoInData,
+  deleteMemosInData,
   filterMemos,
   getMemoById,
   updateMemoCategoryInData,
@@ -20,6 +21,7 @@ import { MemoryMindMap } from './components/memory/MemoryMindMap.jsx'
 import { CategoryPicker } from './components/memory/CategoryPicker.jsx'
 import { QuickCapture } from './components/memory/QuickCapture.jsx'
 import { ImeSafeTextarea } from './components/ImeSafeTextarea.jsx'
+import { TrashIcon } from './components/TrashIcon.jsx'
 
 const TABS = [
   { id: 'home', label: '홈' },
@@ -38,12 +40,25 @@ export default function MemoryView() {
   const [editDraft, setEditDraft] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
   const [showCategoryPicker, setShowCategoryPicker] = useState(false)
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(() => new Set())
 
   useEffect(() => {
     setIsEditing(false)
     setEditDraft('')
     setShowCategoryPicker(false)
   }, [selectedMemoId])
+
+  useEffect(() => {
+    if (tab !== 'memos') {
+      setSelectMode(false)
+      setSelectedIds(new Set())
+    }
+  }, [tab])
+
+  useEffect(() => {
+    setSelectedIds(new Set())
+  }, [listCategory])
 
   const categoryCounts = useMemo(() => {
     const counts = countMemosByCategory(memos)
@@ -112,6 +127,44 @@ export default function MemoryView() {
     setSelectedMemoId(null)
     setTab('memos')
   }, [selectedMemoId, updateMemory])
+
+  const exitSelectMode = useCallback(() => {
+    setSelectMode(false)
+    setSelectedIds(new Set())
+  }, [])
+
+  const enterSelectMode = useCallback(() => {
+    setSelectMode(true)
+    setSelectedIds(new Set())
+  }, [])
+
+  const handleToggleSelect = useCallback((id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const handleSelectAllVisible = useCallback(() => {
+    setSelectedIds((prev) => {
+      const visibleIds = filteredMemos.map((memo) => memo.id)
+      const allSelected =
+        visibleIds.length > 0 && visibleIds.every((id) => prev.has(id))
+      if (allSelected) return new Set()
+      return new Set(visibleIds)
+    })
+  }, [filteredMemos])
+
+  const handleDeleteSelected = useCallback(() => {
+    if (selectedIds.size === 0) return
+    const count = selectedIds.size
+    if (!window.confirm(`선택한 ${count}개의 기록을 삭제할까요?`)) return
+    const ids = [...selectedIds]
+    updateMemory((prev) => deleteMemosInData(prev, ids))
+    exitSelectMode()
+  }, [exitSelectMode, selectedIds, updateMemory])
 
   const handleStartEdit = useCallback(() => {
     if (!selectedMemo) return
@@ -238,12 +291,65 @@ export default function MemoryView() {
 
       {tab === 'memos' && (
         <div className="space-y-4">
-          <div>
-            <h2 className="text-lg font-medium text-planner-ink">전체 기록</h2>
-            <p className="mt-0.5 text-sm text-planner-ink-muted">
-              {filteredMemos.length}개의 메모
-            </p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-medium text-planner-ink">전체 기록</h2>
+              <p className="mt-0.5 text-sm text-planner-ink-muted">
+                {selectMode
+                  ? `${selectedIds.size}개 선택됨 · 총 ${filteredMemos.length}개`
+                  : `${filteredMemos.length}개의 메모`}
+              </p>
+            </div>
+            {filteredMemos.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectMode) exitSelectMode()
+                  else enterSelectMode()
+                }}
+                aria-label={selectMode ? '선택 취소' : '메모 선택 삭제'}
+                aria-pressed={selectMode}
+                className={[
+                  'rounded-lg p-2 transition',
+                  selectMode
+                    ? 'bg-planner-rose-light text-planner-rose'
+                    : 'text-planner-ink-muted hover:bg-planner-warm hover:text-planner-rose',
+                ].join(' ')}
+              >
+                <TrashIcon className="size-5" />
+              </button>
+            )}
           </div>
+
+          {selectMode && (
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-planner-sand bg-white p-2 shadow-soft">
+              <button
+                type="button"
+                onClick={handleSelectAllVisible}
+                className="rounded-lg px-3 py-1.5 text-xs font-medium text-planner-sage transition hover:bg-planner-sage-light"
+              >
+                {filteredMemos.length > 0 &&
+                filteredMemos.every((memo) => selectedIds.has(memo.id))
+                  ? '선택 해제'
+                  : '전체 선택'}
+              </button>
+              <button
+                type="button"
+                onClick={exitSelectMode}
+                className="rounded-lg px-3 py-1.5 text-xs text-planner-ink-muted transition hover:bg-planner-warm"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteSelected}
+                disabled={selectedIds.size === 0}
+                className="ml-auto rounded-lg bg-planner-rose px-3 py-1.5 text-xs font-medium text-white transition hover:bg-planner-rose/90 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {selectedIds.size > 0 ? `${selectedIds.size}개 삭제` : '삭제'}
+              </button>
+            </div>
+          )}
 
           <CategoryFilter
             activeCategory={listCategory}
@@ -267,6 +373,9 @@ export default function MemoryView() {
                   memo={memo}
                   onSelect={handleSelectMemo}
                   onAssignCategory={handleAssignCategory}
+                  selectMode={selectMode}
+                  selected={selectedIds.has(memo.id)}
+                  onToggleSelect={handleToggleSelect}
                 />
               ))}
             </div>
