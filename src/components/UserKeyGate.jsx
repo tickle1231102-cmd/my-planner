@@ -25,9 +25,9 @@ const MODE_TITLES = {
 
 const MODE_DESCRIPTIONS = {
   signIn: '',
-  signUp: '새 ID와 비밀번호를 설정해 주세요.',
-  findId: '가입 시 설정한 닉네임으로 고유 ID를 찾을 수 있습니다.',
-  resetPassword: '고유 ID와 새 비밀번호를 입력해 비밀번호를 재설정하세요.',
+  signUp: '새 아이디와 비밀번호를 설정해 주세요.',
+  findId: '가입 시 설정한 닉네임으로 아이디를 찾을 수 있습니다.',
+  resetPassword: '아이디와 새 비밀번호를 입력해 비밀번호를 재설정하세요.',
 }
 
 export default function UserKeyGate({ onSignIn, onRegister, onBrowseAsGuest, loading, error }) {
@@ -74,7 +74,7 @@ export default function UserKeyGate({ onSignIn, onRegister, onBrowseAsGuest, loa
       try {
         const key = await lookupUserKeyByNickname(nickname)
         setFoundUserKey(key)
-        setSuccessMessage(`고유 ID: ${key}`)
+        setSuccessMessage(`아이디: ${key}`)
       } catch (err) {
         setLocalError(getErrorMessage(err))
       }
@@ -83,7 +83,7 @@ export default function UserKeyGate({ onSignIn, onRegister, onBrowseAsGuest, loa
 
     if (mode === 'resetPassword') {
       if (!isValidUserKey(userKey.trim())) {
-        setLocalError('고유 ID는 3~32자 (한글·영문·숫자·-·_)만 사용할 수 있어요')
+        setLocalError('아이디는 3~32자 (한글·영문·숫자·-·_)만 사용할 수 있어요')
         return
       }
       if (!isValidPassword(password)) {
@@ -108,7 +108,7 @@ export default function UserKeyGate({ onSignIn, onRegister, onBrowseAsGuest, loa
     }
 
     if (!isValidUserKey(userKey.trim())) {
-      setLocalError('고유 ID는 3~32자 (한글·영문·숫자·-·_)만 사용할 수 있어요')
+      setLocalError('아이디는 3~32자 (한글·영문·숫자·-·_)만 사용할 수 있어요')
       return
     }
 
@@ -145,12 +145,14 @@ export default function UserKeyGate({ onSignIn, onRegister, onBrowseAsGuest, loa
   return (
     <div className="flex min-h-svh flex-col items-center justify-center bg-planner-cream px-4 py-8">
       <div className="w-full max-w-md rounded-2xl border border-planner-sand bg-white p-6 shadow-soft sm:p-8">
-        <p className="text-center text-[10px] font-semibold tracking-[0.18em] text-planner-sage sm:tracking-[0.22em]">
+        <h1 className="text-center text-xl font-medium tracking-tight text-planner-ink">
           FOCAL: 인생의 중심을 맞추다
-        </p>
-        <h1 className="mt-2 text-center text-xl font-medium text-planner-ink">
-          {MODE_TITLES[mode]}
         </h1>
+        {!isSignIn && (
+          <p className="mt-2 text-center text-sm font-medium text-planner-ink-muted">
+            {MODE_TITLES[mode]}
+          </p>
+        )}
         {MODE_DESCRIPTIONS[mode] ? (
           <p className="mt-3 text-center text-sm leading-relaxed text-planner-ink-muted">
             {MODE_DESCRIPTIONS[mode]}
@@ -177,7 +179,7 @@ export default function UserKeyGate({ onSignIn, onRegister, onBrowseAsGuest, loa
           {mode !== 'findId' && (
             <label className="block">
               <span className="mb-1 block text-xs font-medium text-planner-ink-muted">
-                고유 ID
+                아이디
               </span>
               <input
                 value={userKey}
@@ -253,7 +255,7 @@ export default function UserKeyGate({ onSignIn, onRegister, onBrowseAsGuest, loa
               }}
               className="w-full rounded-xl border border-planner-sage/30 bg-planner-sage-light px-4 py-2.5 text-sm font-medium text-planner-sage transition hover:bg-planner-sage-light/80"
             >
-              이 ID로 로그인하기
+              이 아이디로 로그인하기
             </button>
           )}
 
