@@ -8,7 +8,9 @@ function keywordFallback(content) {
   return {
     slug: result.slug,
     confidence: result.confidence,
+    confidence_score: result.confidence,
     title: result.title,
+    reason: '',
     model: 'keyword-rules-v1',
     source: 'keyword-fallback',
   }
@@ -39,6 +41,7 @@ export async function handleClassifyMemoRequest(body) {
       status: 200,
       body: {
         ...gemini,
+        confidence_score: gemini.confidence,
         model: getGeminiModel(),
         source: 'gemini',
       },

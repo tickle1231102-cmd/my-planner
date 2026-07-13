@@ -18,6 +18,35 @@ export const MAIN_CATEGORY_SLUGS = [
   'health',
 ]
 
+/** Map Korean display names (and aliases) to internal slugs. */
+export const CATEGORY_NAME_TO_SLUG = {
+  재무: 'finance',
+  finance: 'finance',
+  커리어: 'career',
+  career: 'career',
+  '학습&성장': 'learning',
+  '학습 & 성장': 'learning',
+  학습: 'learning',
+  learning: 'learning',
+  '내부 향상': 'inner',
+  내부향상: 'inner',
+  inner: 'inner',
+  관계: 'relationship',
+  relationship: 'relationship',
+  건강: 'health',
+  health: 'health',
+  미분류: 'uncategorized',
+  uncategorized: 'uncategorized',
+}
+
+export function resolveCategorySlug(value) {
+  if (!value || typeof value !== 'string') return 'uncategorized'
+  const trimmed = value.trim()
+  if (CATEGORY_META[trimmed]) return trimmed
+  const mapped = CATEGORY_NAME_TO_SLUG[trimmed] || CATEGORY_NAME_TO_SLUG[trimmed.toLowerCase()]
+  return mapped || 'uncategorized'
+}
+
 export function getCategoryMeta(slug) {
   return CATEGORY_META[slug] || CATEGORY_META.uncategorized
 }

@@ -95,8 +95,11 @@ export async function classifyMemoContent(content) {
       confidence:
         typeof data.confidence === 'number'
           ? data.confidence
-          : keyword.confidence,
+          : typeof data.confidence_score === 'number'
+            ? data.confidence_score
+            : keyword.confidence,
       title: data.title || keyword.title,
+      reason: typeof data.reason === 'string' ? data.reason : undefined,
       model: data.model || 'keyword-rules-v1',
     }
   } catch {

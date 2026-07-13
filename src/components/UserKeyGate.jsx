@@ -24,7 +24,7 @@ const MODE_TITLES = {
 }
 
 const MODE_DESCRIPTIONS = {
-  signIn: '고유 ID와 비밀번호로 플래너에 접속하세요.',
+  signIn: '',
   signUp: '새 ID와 비밀번호를 설정해 주세요.',
   findId: '가입 시 설정한 닉네임으로 고유 ID를 찾을 수 있습니다.',
   resetPassword: '고유 ID와 새 비밀번호를 입력해 비밀번호를 재설정하세요.',
@@ -145,15 +145,17 @@ export default function UserKeyGate({ onSignIn, onRegister, onBrowseAsGuest, loa
   return (
     <div className="flex min-h-svh flex-col items-center justify-center bg-planner-cream px-4 py-8">
       <div className="w-full max-w-md rounded-2xl border border-planner-sand bg-white p-6 shadow-soft sm:p-8">
-        <p className="text-center text-[10px] font-semibold tracking-[0.25em] text-planner-sage">
-          FOCAL
+        <p className="text-center text-[10px] font-semibold tracking-[0.18em] text-planner-sage sm:tracking-[0.22em]">
+          FOCAL: 인생의 중심을 맞추다
         </p>
         <h1 className="mt-2 text-center text-xl font-medium text-planner-ink">
           {MODE_TITLES[mode]}
         </h1>
-        <p className="mt-3 text-center text-sm leading-relaxed text-planner-ink-muted">
-          {MODE_DESCRIPTIONS[mode]}
-        </p>
+        {MODE_DESCRIPTIONS[mode] ? (
+          <p className="mt-3 text-center text-sm leading-relaxed text-planner-ink-muted">
+            {MODE_DESCRIPTIONS[mode]}
+          </p>
+        ) : null}
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-3">
           {mode === 'findId' && (
