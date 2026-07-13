@@ -1,6 +1,4 @@
-export const MONTH_GOAL_LINES = 3
-
-export { padMonthGoals } from './goalLists.js'
+export { MONTH_GOAL_LINES, padMonthGoals } from './goalLists.js'
 
 export function getDominantMonthAndYear(days) {
   const counts = new Map()

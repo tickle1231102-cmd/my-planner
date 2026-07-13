@@ -1,5 +1,5 @@
 export const YEAR_GOAL_LINES = 5
-export const MONTH_GOAL_LINES = 3
+export const MONTH_GOAL_LINES = 5
 export const WEEK_GOAL_LINES = 5
 
 export function padGoalList(goals, lineCount, idPrefix = 'goal') {
