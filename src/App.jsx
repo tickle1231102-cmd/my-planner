@@ -1440,7 +1440,11 @@ function PlannerApp({ logout, deleteAccount, syncing, userKey, nickname, localOn
           month={selectedMonth}
           today={today}
           monthGoals={monthGoals}
+          yearGoals={yearGoals}
           onUpdateMonthGoal={updateMonthGoal}
+          onUpdateYearGoal={(goalId, updates) =>
+            updateYearGoal(year, goalId, updates)
+          }
           onMonthChange={changeMonth}
           onYearChange={setYear}
           onNavigate={navigateToAppView}

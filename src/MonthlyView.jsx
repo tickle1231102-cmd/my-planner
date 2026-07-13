@@ -7,7 +7,7 @@ import { PlannerQuickNav } from './components/PlannerQuickNav.jsx'
 import { AccountButton } from './components/AccountButton.jsx'
 import MonthGoalChecklist from './components/MonthGoalChecklist.jsx'
 import { useCloudSync } from './context/CloudSyncContext.jsx'
-import { padMonthGoals, padWeekGoals } from './lib/goalLists.js'
+import { padMonthGoals, padWeekGoals, padYearGoals } from './lib/goalLists.js'
 import {
   getFilledTodoTasksForDate,
   getMondayOfWeek,
@@ -301,11 +301,27 @@ function MonthHeader({ month, year, compact = false }) {
   )
 }
 
+function YearGoalsSection({ goals, onUpdateYearGoal }) {
+  return (
+    <section className="rounded-xl border border-planner-sand bg-planner-warm/70 p-2.5 sm:p-3">
+      <h2 className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-planner-ink-muted sm:mb-2 sm:text-xs">
+        연간 목표
+      </h2>
+      <MonthGoalChecklist
+        goals={goals}
+        onUpdateGoal={onUpdateYearGoal}
+        compact
+        placeholder="연간 목표"
+      />
+    </section>
+  )
+}
+
 function MonthGoalsSection({ goals, year, month, onUpdateMonthGoal }) {
   return (
     <section className="rounded-xl border border-planner-sand bg-planner-warm/70 p-2.5 sm:p-3">
       <h2 className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-planner-ink-muted sm:mb-2 sm:text-xs">
-        Goal
+        월간 목표
       </h2>
       <MonthGoalChecklist
         goals={goals}
@@ -313,6 +329,7 @@ function MonthGoalsSection({ goals, year, month, onUpdateMonthGoal }) {
           onUpdateMonthGoal?.(year, month, goalId, updates)
         }
         compact
+        placeholder="월간 목표"
       />
     </section>
   )
@@ -396,7 +413,9 @@ export default function MonthlyView({
   month,
   today,
   monthGoals,
+  yearGoals,
   onUpdateMonthGoal,
+  onUpdateYearGoal,
   onMonthChange,
   onYearChange,
   onNavigate,
@@ -416,6 +435,11 @@ export default function MonthlyView({
   const goals = useMemo(
     () => padMonthGoals(monthGoals?.[year]?.[String(month)]),
     [monthGoals, year, month],
+  )
+
+  const annualGoals = useMemo(
+    () => padYearGoals(yearGoals?.[year]),
+    [yearGoals, year],
   )
 
   const grid = useMemo(() => buildMonthGrid(year, month), [year, month])
@@ -557,16 +581,22 @@ export default function MonthlyView({
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
-        <aside className="hidden shrink-0 border-b border-planner-sand bg-white px-4 py-4 lg:block lg:w-[220px] lg:border-b-0 lg:border-r xl:w-[252px]">
+        <aside className="hidden shrink-0 overflow-y-auto border-b border-planner-sand bg-white px-4 py-4 lg:block lg:w-[220px] lg:border-b-0 lg:border-r xl:w-[252px]">
           <div className="mb-4">
             <MonthHeader month={month} year={year} />
           </div>
-          <MonthGoalsSection
-            goals={goals}
-            year={year}
-            month={month}
-            onUpdateMonthGoal={onUpdateMonthGoal}
-          />
+          <div className="space-y-2.5">
+            <YearGoalsSection
+              goals={annualGoals}
+              onUpdateYearGoal={onUpdateYearGoal}
+            />
+            <MonthGoalsSection
+              goals={goals}
+              year={year}
+              month={month}
+              onUpdateMonthGoal={onUpdateMonthGoal}
+            />
+          </div>
           <div className="mt-3">
             <MonthNotesSection
               monthEntry={monthEntry}
@@ -660,6 +690,10 @@ export default function MonthlyView({
           </div>
 
           <aside className="shrink-0 space-y-2 border-t border-planner-sand bg-white px-3 py-2 lg:hidden">
+            <YearGoalsSection
+              goals={annualGoals}
+              onUpdateYearGoal={onUpdateYearGoal}
+            />
             <MonthGoalsSection
               goals={goals}
               year={year}
