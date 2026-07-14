@@ -21,7 +21,6 @@ import { CalendarIcon } from './components/CalendarIcon.jsx'
 import { PlannerQuickNav } from './components/PlannerQuickNav.jsx'
 import { AppNavMenu } from './components/AppNavMenu.jsx'
 import { PullToRefresh } from './components/PullToRefresh.jsx'
-import { SyncNotice } from './components/SyncNotice.jsx'
 import { useCloudSync } from './context/CloudSyncContext.jsx'
 import { DEFAULT_COLUMNS } from './lib/plannerStorage.js'
 import { formatDateDayOnly, formatDateLabel } from './lib/dateFormat.js'
@@ -1124,7 +1123,7 @@ function App() {
 function PlannerApp({ logout, deleteAccount, syncing, userKey, nickname, localOnly }) {
   const { pullFromCloud } = useCloudSync()
   const handleCloudRefresh = useCallback(
-    () => pullFromCloud({ showNotice: true }),
+    () => pullFromCloud(),
     [pullFromCloud],
   )
   const routeInit = useMemo(() => parseAppRoute(), [])
@@ -1502,7 +1501,6 @@ function PlannerApp({ logout, deleteAccount, syncing, userKey, nickname, localOn
 
   return (
     <div className={['flex h-svh flex-col', isPlannerView && 'bg-planner-cream'].filter(Boolean).join(' ')}>
-      <SyncNotice />
       <header
         className={[
           'sticky top-0 z-40 border-b border-planner-sand',

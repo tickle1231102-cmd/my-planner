@@ -16,7 +16,6 @@ import TimetableRoutinePanel from './components/TimetableRoutinePanel.jsx'
 import { TimetableRoutineIcon } from './components/TimetableRoutineIcon.jsx'
 import WeeklySidebarMonthCalendar from './components/WeeklySidebarMonthCalendar.jsx'
 import { PullToRefresh } from './components/PullToRefresh.jsx'
-import { SyncNotice } from './components/SyncNotice.jsx'
 import {
   DEFAULT_TIMETABLE_COLOR,
   TIMETABLE_COLOR_BY_ID,
@@ -1749,7 +1748,7 @@ export default function WeeklyView({
   const days = useMemo(() => getWeekDays(weekMonday), [weekMonday])
   const { weeklyData, pullFromCloud, localOnly } = useCloudSync()
   const handleCloudRefresh = useCallback(
-    () => pullFromCloud({ showNotice: true }),
+    () => pullFromCloud(),
     [pullFromCloud],
   )
   const {
@@ -1908,7 +1907,6 @@ export default function WeeklyView({
 
   return (
     <div className="flex h-full flex-col bg-planner-cream">
-      <SyncNotice />
       <div className="flex shrink-0 items-center justify-between border-b border-planner-sand bg-white px-3 py-2 sm:px-4">
         <div className="flex min-w-0 shrink-0 items-center gap-2">
           <AppNavMenu activeItem={activeNavItem} onNavigate={onNavigate} />

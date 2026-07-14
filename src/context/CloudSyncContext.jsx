@@ -55,6 +55,7 @@ import {
   saveAnnualToLocal,
   saveWeeklyToLocal,
 } from '../lib/plannerStorage.js'
+import { mergeWeeklyData, stampWeeklyChanges } from '../lib/weeklySyncMerge.js'
 import {
   clearUserKey,
   getSavedUserKey,
@@ -65,8 +66,7 @@ import {
 
 const CloudSyncContext = createContext(null)
 const SAVE_DELAY_MS = 700
-const AUTO_PULL_INTERVAL_MS = 60_000
-const SYNC_NOTICE_MESSAGE = '다른 기기 변경사항을 불러왔어요'
+const AUTO_PULL_INTERVAL_MS = 30_000
 
 function sessionNickname(key) {
   if (key === GUEST_USER_KEY) return '게스트'
@@ -106,7 +106,6 @@ export function CloudSyncProvider({ children }) {
   const [monthlyData, setMonthlyData] = useState(() => loadMonthlyData())
   const [memoryData, setMemoryData] = useState(() => createEmptyMemoryData())
   const [pullGeneration, setPullGeneration] = useState(0)
-  const [syncNotice, setSyncNotice] = useState('')
 
   const saveTimerRef = useRef(null)
   const pendingSaveRef = useRef({})
@@ -258,12 +257,31 @@ export function CloudSyncProvider({ children }) {
     }
   }, [cloudEnabled, localOnly, userKey])
 
-  const clearSyncNotice = useCallback(() => {
-    setSyncNotice('')
-  }, [])
+  const scheduleSave = useCallback(
+    (patch) => {
+      if (!userKey) return
+
+      pendingSaveRef.current = { ...pendingSaveRef.current, ...patch }
+
+      if (patch.annual_data) saveAnnualToLocal(patch.annual_data)
+      if (patch.weekly_data) saveWeeklyToLocal(patch.weekly_data)
+      if (patch.habit_data) saveHabitData(patch.habit_data)
+      if (patch.mandala_data) saveMandalaData(patch.mandala_data)
+      if (patch.monthly_data) saveMonthlyData(patch.monthly_data)
+      if (patch.memory_data) saveMemoryData(patch.memory_data, userKey)
+
+      if (!cloudEnabled || localOnly) return
+
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = setTimeout(() => {
+        flushSave()
+      }, SAVE_DELAY_MS)
+    },
+    [cloudEnabled, flushSave, localOnly, userKey],
+  )
 
   const pullFromCloud = useCallback(
-    async ({ showNotice = false } = {}) => {
+    async () => {
       if (
         !cloudEnabled ||
         localOnly ||
@@ -286,13 +304,16 @@ export function CloudSyncProvider({ children }) {
       setSyncing(true)
       try {
         const cloud = await fetchAppData()
-        applyCloudSnapshot(cloud, userKey)
+        const localWeekly = loadWeeklyFromLocal()
+        const cloudWeekly = cloud?.weekly_data || {}
+        const mergedWeekly = mergeWeeklyData(localWeekly, cloudWeekly)
+        applyCloudSnapshot({ ...cloud, weekly_data: mergedWeekly }, userKey)
+        if (JSON.stringify(mergedWeekly) !== JSON.stringify(cloudWeekly)) {
+          scheduleSave({ weekly_data: mergedWeekly })
+        }
         setPullGeneration((value) => value + 1)
         lastPullAtRef.current = Date.now()
         setError('')
-        if (showNotice) {
-          setSyncNotice(SYNC_NOTICE_MESSAGE)
-        }
         return { ok: true }
       } catch (err) {
         setError(err instanceof Error ? err.message : '동기화 실패')
@@ -302,30 +323,7 @@ export function CloudSyncProvider({ children }) {
         pullInFlightRef.current = false
       }
     },
-    [applyCloudSnapshot, cloudEnabled, flushSave, localOnly, userKey],
-  )
-
-  const scheduleSave = useCallback(
-    (patch) => {
-      if (!userKey) return
-
-      pendingSaveRef.current = { ...pendingSaveRef.current, ...patch }
-
-      if (patch.annual_data) saveAnnualToLocal(patch.annual_data)
-      if (patch.weekly_data) saveWeeklyToLocal(patch.weekly_data)
-      if (patch.habit_data) saveHabitData(patch.habit_data)
-      if (patch.mandala_data) saveMandalaData(patch.mandala_data)
-      if (patch.monthly_data) saveMonthlyData(patch.monthly_data)
-      if (patch.memory_data) saveMemoryData(patch.memory_data, userKey)
-
-      if (!cloudEnabled || localOnly) return
-
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-      saveTimerRef.current = setTimeout(() => {
-        flushSave()
-      }, SAVE_DELAY_MS)
-    },
-    [cloudEnabled, flushSave, localOnly, userKey],
+    [applyCloudSnapshot, cloudEnabled, flushSave, localOnly, scheduleSave, userKey],
   )
 
   const runAuthAction = useCallback(
@@ -527,7 +525,7 @@ export function CloudSyncProvider({ children }) {
     const tryAutoPull = () => {
       if (document.visibilityState !== 'visible') return
       if (Date.now() - lastPullAtRef.current < AUTO_PULL_INTERVAL_MS) return
-      void pullFromCloud({ showNotice: true })
+      void pullFromCloud()
     }
 
     document.addEventListener('visibilitychange', tryAutoPull)
@@ -551,7 +549,8 @@ export function CloudSyncProvider({ children }) {
   const updateWeekly = useCallback(
     (updater) => {
       setWeeklyData((prev) => {
-        const next = typeof updater === 'function' ? updater(prev) : updater
+        const rawNext = typeof updater === 'function' ? updater(prev) : updater
+        const next = stampWeeklyChanges(prev, rawNext)
         scheduleSave({ weekly_data: next })
         return next
       })
@@ -636,8 +635,6 @@ export function CloudSyncProvider({ children }) {
       updateMemory,
       pullFromCloud,
       pullGeneration,
-      syncNotice,
-      clearSyncNotice,
     }),
     [
       userKey,
@@ -668,8 +665,6 @@ export function CloudSyncProvider({ children }) {
       updateMemory,
       pullFromCloud,
       pullGeneration,
-      syncNotice,
-      clearSyncNotice,
     ],
   )
 

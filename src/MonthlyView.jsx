@@ -6,7 +6,6 @@ import { CalendarIcon } from './components/CalendarIcon.jsx'
 import { PlannerQuickNav } from './components/PlannerQuickNav.jsx'
 import { AccountButton } from './components/AccountButton.jsx'
 import { PullToRefresh } from './components/PullToRefresh.jsx'
-import { SyncNotice } from './components/SyncNotice.jsx'
 import MonthGoalChecklist from './components/MonthGoalChecklist.jsx'
 import { useCloudSync } from './context/CloudSyncContext.jsx'
 import { padMonthGoals, padWeekGoals, padYearGoals } from './lib/goalLists.js'
@@ -433,7 +432,7 @@ export default function MonthlyView({
   const [mobileNotesOpen, setMobileNotesOpen] = useState(false)
   const { pullFromCloud, localOnly } = useCloudSync()
   const handleCloudRefresh = useCallback(
-    () => pullFromCloud({ showNotice: true }),
+    () => pullFromCloud(),
     [pullFromCloud],
   )
   const { monthEntry, setNotes } = useMonthlyPlanner(year, month)
@@ -556,7 +555,6 @@ export default function MonthlyView({
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-planner-cream">
-      <SyncNotice />
       <div className="flex shrink-0 items-center justify-between border-b border-planner-sand bg-white px-3 py-2 sm:px-4">
         <div className="flex min-w-0 items-center gap-2">
           <AppNavMenu activeItem={activeNavItem} onNavigate={onNavigate} />
