@@ -65,6 +65,8 @@ import {
 
 const CloudSyncContext = createContext(null)
 const SAVE_DELAY_MS = 700
+const AUTO_PULL_INTERVAL_MS = 60_000
+const SYNC_NOTICE_MESSAGE = '다른 기기 변경사항을 불러왔어요'
 
 function sessionNickname(key) {
   if (key === GUEST_USER_KEY) return '게스트'
@@ -103,9 +105,13 @@ export function CloudSyncProvider({ children }) {
   const [mandalaData, setMandalaData] = useState(() => loadMandalaData())
   const [monthlyData, setMonthlyData] = useState(() => loadMonthlyData())
   const [memoryData, setMemoryData] = useState(() => createEmptyMemoryData())
+  const [pullGeneration, setPullGeneration] = useState(0)
+  const [syncNotice, setSyncNotice] = useState('')
 
   const saveTimerRef = useRef(null)
   const pendingSaveRef = useRef({})
+  const lastPullAtRef = useRef(0)
+  const pullInFlightRef = useRef(false)
 
   const finishLocalSession = useCallback((key, name = '') => {
     saveUserKey(key)
@@ -119,6 +125,29 @@ export function CloudSyncProvider({ children }) {
     setMemoryData(loadMemoryData(key))
     setReady(true)
     setError('')
+  }, [])
+
+  const applyCloudSnapshot = useCallback((cloud, key) => {
+    const annual = withDefaultAnnual(cloud.annual_data)
+    const weekly = cloud.weekly_data || {}
+    const habit = cloud.habit_data || {}
+    const mandala = cloud.mandala_data || loadMandalaData()
+    const monthly = cloud.monthly_data || loadMonthlyData()
+    const memory = withDefaultMemory(cloud.memory_data)
+
+    setAnnualData(annual)
+    setWeeklyData(weekly)
+    setHabitData(habit)
+    setMandalaData(mandala)
+    setMonthlyData(monthly)
+    setMemoryData(memory)
+
+    saveAnnualToLocal(cloud.annual_data)
+    saveWeeklyToLocal(weekly)
+    saveHabitData(habit)
+    saveMandalaData(mandala)
+    saveMonthlyData(monthly)
+    saveMemoryData(memory, key)
   }, [])
 
   const hydrateAfterAuth = useCallback(async (key, name = '', options = {}) => {
@@ -179,20 +208,11 @@ export function CloudSyncProvider({ children }) {
     saveUserKey(key)
     setUserKey(key)
     setNickname(profile?.nickname || name || '')
-    setAnnualData(withDefaultAnnual(cloud.annual_data))
-    setWeeklyData(cloud.weekly_data || {})
-    setHabitData(cloud.habit_data || {})
-    setMandalaData(cloud.mandala_data || loadMandalaData())
-    setMonthlyData(cloud.monthly_data || loadMonthlyData())
-    setMemoryData(withDefaultMemory(cloud.memory_data))
-    saveAnnualToLocal(cloud.annual_data)
-    saveWeeklyToLocal(cloud.weekly_data || {})
-    saveHabitData(cloud.habit_data || {})
-    saveMandalaData(cloud.mandala_data || loadMandalaData())
-    saveMonthlyData(cloud.monthly_data || loadMonthlyData())
-    saveMemoryData(withDefaultMemory(cloud.memory_data), key)
+    applyCloudSnapshot(cloud, key)
+    setPullGeneration((value) => value + 1)
+    lastPullAtRef.current = Date.now()
     setError('')
-  }, [])
+  }, [applyCloudSnapshot])
 
   const flushSave = useCallback(async () => {
     const patch = pendingSaveRef.current
@@ -236,7 +256,54 @@ export function CloudSyncProvider({ children }) {
     } finally {
       setSyncing(false)
     }
-  }, [cloudEnabled, localOnly])
+  }, [cloudEnabled, localOnly, userKey])
+
+  const clearSyncNotice = useCallback(() => {
+    setSyncNotice('')
+  }, [])
+
+  const pullFromCloud = useCallback(
+    async ({ showNotice = false } = {}) => {
+      if (
+        !cloudEnabled ||
+        localOnly ||
+        !userKey ||
+        userKey === GUEST_USER_KEY ||
+        pullInFlightRef.current
+      ) {
+        return { ok: false }
+      }
+
+      pullInFlightRef.current = true
+
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current)
+        saveTimerRef.current = null
+      }
+
+      await flushSave()
+
+      setSyncing(true)
+      try {
+        const cloud = await fetchAppData()
+        applyCloudSnapshot(cloud, userKey)
+        setPullGeneration((value) => value + 1)
+        lastPullAtRef.current = Date.now()
+        setError('')
+        if (showNotice) {
+          setSyncNotice(SYNC_NOTICE_MESSAGE)
+        }
+        return { ok: true }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : '동기화 실패')
+        return { ok: false }
+      } finally {
+        setSyncing(false)
+        pullInFlightRef.current = false
+      }
+    },
+    [applyCloudSnapshot, cloudEnabled, flushSave, localOnly, userKey],
+  )
 
   const scheduleSave = useCallback(
     (patch) => {
@@ -446,6 +513,32 @@ export function CloudSyncProvider({ children }) {
     }
   }, [])
 
+  useEffect(() => {
+    if (
+      !ready ||
+      localOnly ||
+      !cloudEnabled ||
+      !userKey ||
+      userKey === GUEST_USER_KEY
+    ) {
+      return undefined
+    }
+
+    const tryAutoPull = () => {
+      if (document.visibilityState !== 'visible') return
+      if (Date.now() - lastPullAtRef.current < AUTO_PULL_INTERVAL_MS) return
+      void pullFromCloud({ showNotice: true })
+    }
+
+    document.addEventListener('visibilitychange', tryAutoPull)
+    const interval = window.setInterval(tryAutoPull, AUTO_PULL_INTERVAL_MS)
+
+    return () => {
+      document.removeEventListener('visibilitychange', tryAutoPull)
+      window.clearInterval(interval)
+    }
+  }, [cloudEnabled, localOnly, pullFromCloud, ready, userKey])
+
   const updateAnnual = useCallback(
     (nextAnnual) => {
       const merged = withDefaultAnnual(nextAnnual)
@@ -541,6 +634,10 @@ export function CloudSyncProvider({ children }) {
       updateMandala,
       updateMonthly,
       updateMemory,
+      pullFromCloud,
+      pullGeneration,
+      syncNotice,
+      clearSyncNotice,
     }),
     [
       userKey,
@@ -569,6 +666,10 @@ export function CloudSyncProvider({ children }) {
       updateMandala,
       updateMonthly,
       updateMemory,
+      pullFromCloud,
+      pullGeneration,
+      syncNotice,
+      clearSyncNotice,
     ],
   )
 

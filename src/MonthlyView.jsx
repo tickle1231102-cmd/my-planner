@@ -5,6 +5,8 @@ import { AppNavMenu } from './components/AppNavMenu.jsx'
 import { CalendarIcon } from './components/CalendarIcon.jsx'
 import { PlannerQuickNav } from './components/PlannerQuickNav.jsx'
 import { AccountButton } from './components/AccountButton.jsx'
+import { PullToRefresh } from './components/PullToRefresh.jsx'
+import { SyncNotice } from './components/SyncNotice.jsx'
 import MonthGoalChecklist from './components/MonthGoalChecklist.jsx'
 import { useCloudSync } from './context/CloudSyncContext.jsx'
 import { padMonthGoals, padWeekGoals, padYearGoals } from './lib/goalLists.js'
@@ -246,13 +248,13 @@ function DayCell({ day, year, month, todos, today, onToggleTodo, onOpenWeek }) {
 }
 
 function useMonthlyPlanner(year, month) {
-  const { monthlyData, updateMonthly } = useCloudSync()
+  const { monthlyData, updateMonthly, pullGeneration } = useCloudSync()
 
   const remoteEntry = useMemo(
     () => getMonthEntry(monthlyData, year, month),
     [monthlyData, year, month],
   )
-  const resetKey = `${year}-${month}`
+  const resetKey = `${year}-${month}:${pullGeneration}`
 
   const commitEntry = useCallback(
     (nextEntry) => {
@@ -429,6 +431,11 @@ export default function MonthlyView({
 }) {
   const notesRef = useRef(null)
   const [mobileNotesOpen, setMobileNotesOpen] = useState(false)
+  const { pullFromCloud, localOnly } = useCloudSync()
+  const handleCloudRefresh = useCallback(
+    () => pullFromCloud({ showNotice: true }),
+    [pullFromCloud],
+  )
   const { monthEntry, setNotes } = useMonthlyPlanner(year, month)
   const { weeklyData, updateWeekly } = useCloudSync()
 
@@ -549,6 +556,7 @@ export default function MonthlyView({
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-planner-cream">
+      <SyncNotice />
       <div className="flex shrink-0 items-center justify-between border-b border-planner-sand bg-white px-3 py-2 sm:px-4">
         <div className="flex min-w-0 items-center gap-2">
           <AppNavMenu activeItem={activeNavItem} onNavigate={onNavigate} />
@@ -580,6 +588,11 @@ export default function MonthlyView({
         </div>
       </div>
 
+      <PullToRefresh
+        onRefresh={handleCloudRefresh}
+        disabled={localOnly}
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain"
+      >
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
         <aside className="hidden shrink-0 overflow-y-auto border-b border-planner-sand bg-white px-4 py-4 lg:block lg:w-[220px] lg:border-b-0 lg:border-r xl:w-[252px]">
           <div className="mb-4">
@@ -711,6 +724,7 @@ export default function MonthlyView({
           />
         </div>
       </div>
+      </PullToRefresh>
 
       <MobileMonthStrip
         year={year}

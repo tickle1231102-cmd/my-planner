@@ -20,6 +20,8 @@ import { AccountButton } from './components/AccountButton.jsx'
 import { CalendarIcon } from './components/CalendarIcon.jsx'
 import { PlannerQuickNav } from './components/PlannerQuickNav.jsx'
 import { AppNavMenu } from './components/AppNavMenu.jsx'
+import { PullToRefresh } from './components/PullToRefresh.jsx'
+import { SyncNotice } from './components/SyncNotice.jsx'
 import { useCloudSync } from './context/CloudSyncContext.jsx'
 import { DEFAULT_COLUMNS } from './lib/plannerStorage.js'
 import { formatDateDayOnly, formatDateLabel } from './lib/dateFormat.js'
@@ -134,8 +136,10 @@ function buildMonthSpans(weeks) {
 }
 
 function usePlannerStorage(year) {
-  const { ready, annualData, updateAnnual } = useCloudSync()
+  const { ready, annualData, updateAnnual, pullGeneration } = useCloudSync()
   const hydratedRef = useRef(false)
+  const skipSaveAfterPullRef = useRef(false)
+  const lastSyncedPullRef = useRef(0)
 
   const [columns, setColumns] = useState(() => annualData.columns)
   const [weekData, setWeekData] = useState(() => annualData.weekData)
@@ -175,7 +179,25 @@ function usePlannerStorage(year) {
   }, [ready, annualData])
 
   useEffect(() => {
+    if (!ready || pullGeneration === 0 || pullGeneration === lastSyncedPullRef.current) {
+      return
+    }
+    lastSyncedPullRef.current = pullGeneration
+    skipSaveAfterPullRef.current = true
+    setColumns(annualData.columns)
+    setWeekData(annualData.weekData)
+    setDateColors(annualData.dateColors || {})
+    setMonthGoals(annualData.monthGoals || {})
+    setYearGoals(annualData.yearGoals || {})
+    setYearMemos(annualData.yearMemos || {})
+  }, [annualData, pullGeneration, ready])
+
+  useEffect(() => {
     if (!ready || !hydratedRef.current) return
+    if (skipSaveAfterPullRef.current) {
+      skipSaveAfterPullRef.current = false
+      return
+    }
 
     const timer = setTimeout(() => {
       updateAnnual(snapshotRef.current)
@@ -703,7 +725,7 @@ function YearNavigator({ year, onChange }) {
 }
 
 function scrollToTodayAnchor(behavior = 'smooth') {
-  const main = document.querySelector('main')
+  const main = document.querySelector('[data-planner-main]')
   const todayEl = [...document.querySelectorAll('[data-today-anchor="true"]')].find(
     (el) => el.getClientRects().length > 0,
   )
@@ -1100,6 +1122,11 @@ function App() {
 }
 
 function PlannerApp({ logout, deleteAccount, syncing, userKey, nickname, localOnly }) {
+  const { pullFromCloud } = useCloudSync()
+  const handleCloudRefresh = useCallback(
+    () => pullFromCloud({ showNotice: true }),
+    [pullFromCloud],
+  )
   const routeInit = useMemo(() => parseAppRoute(), [])
   const accountReturnViewRef = useRef(routeInit.view === 'account' ? 'annual' : routeInit.view)
 
@@ -1405,7 +1432,7 @@ function PlannerApp({ logout, deleteAccount, syncing, userKey, nickname, localOn
 
   useEffect(() => {
     if (view !== 'annual' || year === today.getFullYear()) return
-    document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' })
+    document.querySelector('[data-planner-main]')?.scrollTo({ top: 0, behavior: 'smooth' })
   }, [year, view, today])
 
   if (view === 'account') {
@@ -1475,6 +1502,7 @@ function PlannerApp({ logout, deleteAccount, syncing, userKey, nickname, localOn
 
   return (
     <div className={['flex h-svh flex-col', isPlannerView && 'bg-planner-cream'].filter(Boolean).join(' ')}>
+      <SyncNotice />
       <header
         className={[
           'sticky top-0 z-40 border-b border-planner-sand',
@@ -1553,9 +1581,11 @@ function PlannerApp({ logout, deleteAccount, syncing, userKey, nickname, localOn
         )}
       </header>
 
-      <main
+      <PullToRefresh
+        onRefresh={handleCloudRefresh}
+        disabled={localOnly}
         className={[
-          'scrollbar-thin min-h-0 flex-1 overflow-auto',
+          'scrollbar-thin min-h-0 flex-1 overflow-auto overscroll-y-contain',
           isPlannerView && 'bg-planner-cream',
         ].filter(Boolean).join(' ')}
       >
@@ -1626,7 +1656,7 @@ function PlannerApp({ logout, deleteAccount, syncing, userKey, nickname, localOn
             </>
           )}
         </div>
-      </main>
+      </PullToRefresh>
 
       <AddColumnModal
         open={showAddColumn}

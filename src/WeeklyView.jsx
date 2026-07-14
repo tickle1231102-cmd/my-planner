@@ -15,6 +15,8 @@ import { AccountButton } from './components/AccountButton.jsx'
 import TimetableRoutinePanel from './components/TimetableRoutinePanel.jsx'
 import { TimetableRoutineIcon } from './components/TimetableRoutineIcon.jsx'
 import WeeklySidebarMonthCalendar from './components/WeeklySidebarMonthCalendar.jsx'
+import { PullToRefresh } from './components/PullToRefresh.jsx'
+import { SyncNotice } from './components/SyncNotice.jsx'
 import {
   DEFAULT_TIMETABLE_COLOR,
   TIMETABLE_COLOR_BY_ID,
@@ -316,7 +318,7 @@ function normalizeWeekData(raw) {
 }
 
 function useWeeklyStorage(weekId, weekMonday) {
-  const { weeklyData, updateWeekly } = useCloudSync()
+  const { weeklyData, updateWeekly, pullGeneration } = useCloudSync()
   const remoteWeek = useMemo(
     () => normalizeWeekData(weeklyData[weekId]),
     [weeklyData, weekId],
@@ -333,7 +335,7 @@ function useWeeklyStorage(weekId, weekMonday) {
   )
 
   const [weekData, setWeekData] = useDebouncedDraft(remoteWeek, commitWeek, {
-    resetKey: weekId,
+    resetKey: `${weekId}:${pullGeneration}`,
   })
 
   const patchWeek = useCallback(
@@ -1745,7 +1747,11 @@ export default function WeeklyView({
 }) {
   const weekId = useMemo(() => getWeekIdFromMonday(weekMonday), [weekMonday])
   const days = useMemo(() => getWeekDays(weekMonday), [weekMonday])
-  const { weeklyData } = useCloudSync()
+  const { weeklyData, pullFromCloud, localOnly } = useCloudSync()
+  const handleCloudRefresh = useCallback(
+    () => pullFromCloud({ showNotice: true }),
+    [pullFromCloud],
+  )
   const {
     weekData,
     setWeekGoal,
@@ -1902,6 +1908,7 @@ export default function WeeklyView({
 
   return (
     <div className="flex h-full flex-col bg-planner-cream">
+      <SyncNotice />
       <div className="flex shrink-0 items-center justify-between border-b border-planner-sand bg-white px-3 py-2 sm:px-4">
         <div className="flex min-w-0 shrink-0 items-center gap-2">
           <AppNavMenu activeItem={activeNavItem} onNavigate={onNavigate} />
@@ -1951,6 +1958,11 @@ export default function WeeklyView({
         </div>
       </div>
 
+      <PullToRefresh
+        onRefresh={handleCloudRefresh}
+        disabled={localOnly}
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain lg:overflow-hidden"
+      >
       <div className="flex min-h-0 flex-1 overflow-hidden lg:flex-row">
         <aside
           className={`hidden shrink-0 flex-col border-planner-sand bg-white ${SIDEBAR_WIDTH} lg:flex lg:border-r`}
@@ -2051,6 +2063,7 @@ export default function WeeklyView({
           </div>
         </div>
       </div>
+      </PullToRefresh>
 
       {postponeMenu && (
         <TaskPostponeMenu
