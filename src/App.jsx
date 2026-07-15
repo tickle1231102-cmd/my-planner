@@ -723,6 +723,67 @@ function YearNavigator({ year, onChange }) {
   )
 }
 
+function YearProgressBar({ year, today }) {
+  const { percent, daysLeft, dayOfYear, totalDays } = useMemo(() => {
+    const dayMs = 24 * 60 * 60 * 1000
+    const startOfYear = new Date(year, 0, 1)
+    const startOfNextYear = new Date(year + 1, 0, 1)
+    const total = Math.round((startOfNextYear - startOfYear) / dayMs)
+    const elapsed = Math.floor((today - startOfYear) / dayMs)
+    const clampedElapsed = Math.min(Math.max(elapsed, 0), total)
+    return {
+      percent: (clampedElapsed / total) * 100,
+      daysLeft: total - clampedElapsed,
+      dayOfYear: Math.min(clampedElapsed + 1, total),
+      totalDays: total,
+    }
+  }, [year, today])
+
+  const roundedPercent = Math.round(percent * 10) / 10
+  const ddayLabel = daysLeft <= 0 ? 'D-DAY' : `D-${daysLeft}`
+
+  return (
+    <div className="mb-2 rounded-2xl border border-planner-sand bg-white p-3 shadow-soft sm:mb-3 sm:p-4">
+      <div className="flex items-end justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-planner-sage sm:text-xs">
+            {year}년
+          </p>
+          <p className="mt-0.5 flex items-baseline gap-1.5 text-planner-ink">
+            <span className="text-xl font-semibold tabular-nums sm:text-2xl">
+              {roundedPercent}%
+            </span>
+            <span className="text-[11px] text-planner-ink-muted sm:text-xs">
+              {dayOfYear} / {totalDays}일
+            </span>
+          </p>
+        </div>
+        <div className="shrink-0 text-right">
+          <span className="inline-flex items-center rounded-full bg-planner-sage px-3 py-1 text-sm font-semibold tabular-nums text-white sm:text-base">
+            {ddayLabel}
+          </span>
+          <p className="mt-1 text-[11px] text-planner-ink-muted sm:text-xs">
+            올해 {daysLeft}일 남음
+          </p>
+        </div>
+      </div>
+      <div
+        className="mt-2.5 h-2.5 w-full overflow-hidden rounded-full bg-planner-sage-muted sm:h-3"
+        role="progressbar"
+        aria-valuenow={roundedPercent}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={`${year}년 ${roundedPercent}%`}
+      >
+        <div
+          className="h-full rounded-full bg-planner-sage transition-[width] duration-500 ease-out"
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+    </div>
+  )
+}
+
 function scrollToTodayAnchor(behavior = 'smooth') {
   const main = document.querySelector('[data-planner-main]')
   const todayEl = [...document.querySelectorAll('[data-today-anchor="true"]')].find(
@@ -1612,6 +1673,9 @@ function PlannerApp({ logout, deleteAccount, syncing, userKey, nickname, localOn
             <MemoryView />
           ) : (
             <>
+          {year === today.getFullYear() && (
+            <YearProgressBar year={year} today={today} />
+          )}
           <div className="hidden overflow-hidden rounded-2xl border border-planner-sand bg-white shadow-soft lg:block">
             <PlannerGrid
               weeks={weeks}
