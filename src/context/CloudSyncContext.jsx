@@ -47,7 +47,6 @@ import {
   withDefaultMemory,
 } from '../lib/memoryStorage.js'
 import {
-  DEFAULT_COLUMNS,
   hasLocalData,
   isCloudEmpty,
   loadAnnualFromLocal,
@@ -55,6 +54,11 @@ import {
   saveAnnualToLocal,
   saveWeeklyToLocal,
 } from '../lib/plannerStorage.js'
+import {
+  mergeAnnualData,
+  stampAnnualChanges,
+  withDefaultAnnual,
+} from '../lib/annualSyncMerge.js'
 import { mergeWeeklyData, stampWeeklyChanges } from '../lib/weeklySyncMerge.js'
 import {
   clearUserKey,
@@ -72,18 +76,6 @@ function sessionNickname(key) {
   if (key === GUEST_USER_KEY) return '게스트'
   if (key === LOCAL_USER_KEY) return '로컬 저장'
   return ''
-}
-
-function withDefaultAnnual(annual) {
-  return {
-    columns: annual?.columns?.length ? annual.columns : DEFAULT_COLUMNS,
-    weekData: annual?.weekData || {},
-    dateColors: annual?.dateColors || {},
-    monthGoals: annual?.monthGoals || {},
-    yearGoals: annual?.yearGoals || {},
-    yearMemos: annual?.yearMemos || {},
-    year: annual?.year,
-  }
 }
 
 export function CloudSyncProvider({ children }) {
@@ -141,7 +133,7 @@ export function CloudSyncProvider({ children }) {
     setMonthlyData(monthly)
     setMemoryData(memory)
 
-    saveAnnualToLocal(cloud.annual_data)
+    saveAnnualToLocal(annual)
     saveWeeklyToLocal(weekly)
     saveHabitData(habit)
     saveMandalaData(mandala)
@@ -152,12 +144,16 @@ export function CloudSyncProvider({ children }) {
   const hydrateAfterAuth = useCallback(async (key, name = '', options = {}) => {
     const { isNewAccount = false } = options
     let cloud = await fetchAppData()
+    const localAnnual = loadAnnualFromLocal()
+    const cloudAnnual = cloud?.annual_data
+    const mergedAnnual = mergeAnnualData(localAnnual, cloudAnnual)
+    const annualNeedsPush =
+      JSON.stringify(mergedAnnual) !==
+      JSON.stringify(withDefaultAnnual(cloudAnnual))
+    cloud = { ...cloud, annual_data: mergedAnnual }
 
-    if (isCloudEmpty(cloud) && hasLocalData()) {
-      const annual_data = loadAnnualFromLocal() || {
-        columns: DEFAULT_COLUMNS,
-        weekData: {},
-      }
+    if (isCloudEmpty({ ...cloud, annual_data: cloudAnnual }) && hasLocalData()) {
+      const annual_data = mergedAnnual
       const weekly_data = loadWeeklyFromLocal()
       const habit_data = isNewAccount ? {} : loadHabitData()
       const mandala_data = loadMandalaData()
@@ -172,6 +168,12 @@ export function CloudSyncProvider({ children }) {
         monthly_data,
         memory_data,
       })
+    } else if (annualNeedsPush) {
+      // Local annual had content cloud was missing — push merged result.
+      cloud = {
+        ...(await persistAppData({ annual_data: mergedAnnual })),
+        annual_data: mergedAnnual,
+      }
     } else if (
       !isNewAccount &&
       isHabitDataEmpty(cloud.habit_data) &&
@@ -226,7 +228,7 @@ export function CloudSyncProvider({ children }) {
       const data = await persistAppData(patch)
       if (data?.annual_data) {
         setAnnualData(withDefaultAnnual(data.annual_data))
-        saveAnnualToLocal(data.annual_data)
+        saveAnnualToLocal(withDefaultAnnual(data.annual_data))
       }
       if (data?.weekly_data) {
         setWeeklyData(data.weekly_data)
@@ -307,9 +309,25 @@ export function CloudSyncProvider({ children }) {
         const localWeekly = loadWeeklyFromLocal()
         const cloudWeekly = cloud?.weekly_data || {}
         const mergedWeekly = mergeWeeklyData(localWeekly, cloudWeekly)
-        applyCloudSnapshot({ ...cloud, weekly_data: mergedWeekly }, userKey)
+        const localAnnual = loadAnnualFromLocal()
+        const cloudAnnual = cloud?.annual_data
+        const mergedAnnual = mergeAnnualData(localAnnual, cloudAnnual)
+        applyCloudSnapshot(
+          { ...cloud, weekly_data: mergedWeekly, annual_data: mergedAnnual },
+          userKey,
+        )
+        const patch = {}
         if (JSON.stringify(mergedWeekly) !== JSON.stringify(cloudWeekly)) {
-          scheduleSave({ weekly_data: mergedWeekly })
+          patch.weekly_data = mergedWeekly
+        }
+        if (
+          JSON.stringify(mergedAnnual) !==
+          JSON.stringify(withDefaultAnnual(cloudAnnual))
+        ) {
+          patch.annual_data = mergedAnnual
+        }
+        if (Object.keys(patch).length > 0) {
+          scheduleSave(patch)
         }
         setPullGeneration((value) => value + 1)
         lastPullAtRef.current = Date.now()
@@ -539,9 +557,11 @@ export function CloudSyncProvider({ children }) {
 
   const updateAnnual = useCallback(
     (nextAnnual) => {
-      const merged = withDefaultAnnual(nextAnnual)
-      setAnnualData(merged)
-      scheduleSave({ annual_data: merged })
+      setAnnualData((prev) => {
+        const next = stampAnnualChanges(prev, nextAnnual)
+        scheduleSave({ annual_data: next })
+        return next
+      })
     },
     [scheduleSave],
   )

@@ -1,3 +1,4 @@
+import { annualHasContent } from './annualSyncMerge.js'
 import { hasLocalHabitData } from './habitStorage.js'
 
 export const ANNUAL_STORAGE_KEY = 'annual-planner-v1'
@@ -29,6 +30,7 @@ export function loadWeeklyFromLocal() {
 }
 
 export function saveAnnualToLocal(data) {
+  if (data == null) return
   localStorage.setItem(ANNUAL_STORAGE_KEY, JSON.stringify(data))
 }
 
@@ -38,24 +40,14 @@ export function saveWeeklyToLocal(data) {
 
 export function isCloudEmpty(cloud) {
   if (!cloud) return true
-  const annual = cloud.annual_data
   const weekly = cloud.weekly_data
-  const annualEmpty =
-    !annual?.weekData || Object.keys(annual.weekData).length === 0
   const weeklyEmpty = !weekly || Object.keys(weekly).length === 0
-  const columnsDefault =
-    !annual?.columns ||
-    (annual.columns.length === 2 &&
-      annual.columns[0]?.id === 'schedule' &&
-      annual.columns[1]?.id === 'goals')
-  return annualEmpty && weeklyEmpty && columnsDefault
+  return !annualHasContent(cloud.annual_data) && weeklyEmpty
 }
 
 export function hasLocalData() {
   const annual = loadAnnualFromLocal()
   const weekly = loadWeeklyFromLocal()
-  const annualHas =
-    annual?.weekData && Object.keys(annual.weekData).length > 0
   const weeklyHas = weekly && Object.keys(weekly).length > 0
-  return annualHas || weeklyHas || hasLocalHabitData()
+  return annualHasContent(annual) || weeklyHas || hasLocalHabitData()
 }
