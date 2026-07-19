@@ -37,15 +37,37 @@ function toggleDraftDay(draft, dayIdx) {
   }
 }
 
-function RoutineForm({ draft, onChange, onSubmit, submitLabel }) {
+function RoutineForm({
+  draft,
+  onChange,
+  onSubmit,
+  submitLabel,
+  editing = false,
+  onCancel,
+  formRef,
+}) {
   return (
     <form
+      ref={formRef}
       className="space-y-3 rounded-xl border border-planner-sand bg-planner-warm/35 p-3"
       onSubmit={(event) => {
         event.preventDefault()
         onSubmit()
       }}
     >
+      {editing && (
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold text-planner-ink">루틴 수정</p>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-md px-2 py-1 text-[11px] text-planner-ink-muted transition hover:bg-planner-sand/60"
+          >
+            취소
+          </button>
+        </div>
+      )}
+
       <div>
         <p className="mb-1.5 text-[10px] font-medium text-planner-ink-muted">요일</p>
         <div className="flex flex-wrap gap-1">
@@ -184,7 +206,9 @@ function RoutineForm({ draft, onChange, onSubmit, submitLabel }) {
 
 export default function TimetableRoutinePanel({ routines, onChange, onClose }) {
   const panelRef = useRef(null)
+  const formRef = useRef(null)
   const [draft, setDraft] = useState(() => defaultRoutineDraft())
+  const [editingRoutineId, setEditingRoutineId] = useState(null)
 
   useEffect(() => {
     const handlePointer = (event) => {
@@ -209,11 +233,24 @@ export default function TimetableRoutinePanel({ routines, onChange, onClose }) {
     }
   }, [onClose])
 
-  const addRoutine = () => {
+  const isDraftValid = () => {
     const repeatUntil = parseDateKey(draft.repeatUntil)
     const repeatFrom = parseDateKey(draft.repeatFrom)
-    if (!repeatUntil || !repeatFrom || repeatUntil < repeatFrom) return
-    if (!draft.daysOfWeek.length) return
+    return (
+      repeatUntil &&
+      repeatFrom &&
+      repeatUntil >= repeatFrom &&
+      draft.daysOfWeek.length > 0
+    )
+  }
+
+  const resetForm = () => {
+    setDraft(defaultRoutineDraft())
+    setEditingRoutineId(null)
+  }
+
+  const addRoutine = () => {
+    if (!isDraftValid()) return
 
     onChange([
       ...routines,
@@ -223,11 +260,47 @@ export default function TimetableRoutinePanel({ routines, onChange, onClose }) {
         daysOfWeek: [...draft.daysOfWeek],
       },
     ])
-    setDraft(defaultRoutineDraft())
+    resetForm()
+  }
+
+  const startEditing = (routine) => {
+    setEditingRoutineId(routine.id)
+    setDraft({
+      daysOfWeek: [...routine.daysOfWeek],
+      startHour: routine.startHour,
+      startSlot: routine.startSlot,
+      endHour: routine.endHour,
+      endSlot: routine.endSlot,
+      colorId: routine.colorId,
+      repeatFrom: routine.repeatFrom,
+      repeatUntil: routine.repeatUntil,
+    })
+    window.requestAnimationFrame(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    })
+  }
+
+  const saveRoutine = () => {
+    if (!editingRoutineId || !isDraftValid()) return
+
+    onChange(
+      routines.map((routine) =>
+        routine.id === editingRoutineId
+          ? {
+              ...routine,
+              ...draft,
+              id: routine.id,
+              daysOfWeek: [...draft.daysOfWeek],
+            }
+          : routine,
+      ),
+    )
+    resetForm()
   }
 
   const removeRoutine = (routineId) => {
     onChange(routines.filter((routine) => routine.id !== routineId))
+    if (editingRoutineId === routineId) resetForm()
   }
 
   return (
@@ -268,7 +341,12 @@ export default function TimetableRoutinePanel({ routines, onChange, onClose }) {
                 return (
                   <li
                     key={routine.id}
-                    className="flex items-center gap-2 rounded-xl border border-planner-sand bg-planner-warm/25 px-3 py-2"
+                    className={[
+                      'flex items-center gap-2 rounded-xl border px-3 py-2',
+                      editingRoutineId === routine.id
+                        ? 'border-planner-sage bg-planner-sage-light/35'
+                        : 'border-planner-sand bg-planner-warm/25',
+                    ].join(' ')}
                   >
                     <span
                       className={[
@@ -287,6 +365,14 @@ export default function TimetableRoutinePanel({ routines, onChange, onClose }) {
                     </div>
                     <button
                       type="button"
+                      onClick={() => startEditing(routine)}
+                      aria-label={`${formatRoutineDays(routine.daysOfWeek)} 루틴 수정`}
+                      className="shrink-0 rounded-md px-2 py-1 text-[11px] text-planner-sage transition hover:bg-planner-sage-light"
+                    >
+                      수정
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => removeRoutine(routine.id)}
                       className="shrink-0 rounded-md px-2 py-1 text-[11px] text-planner-rose transition hover:bg-planner-rose-light"
                     >
@@ -303,10 +389,13 @@ export default function TimetableRoutinePanel({ routines, onChange, onClose }) {
           )}
 
           <RoutineForm
+            formRef={formRef}
             draft={draft}
             onChange={setDraft}
-            onSubmit={addRoutine}
-            submitLabel="루틴 추가"
+            onSubmit={editingRoutineId ? saveRoutine : addRoutine}
+            submitLabel={editingRoutineId ? '변경사항 저장' : '루틴 추가'}
+            editing={!!editingRoutineId}
+            onCancel={resetForm}
           />
         </div>
       </div>

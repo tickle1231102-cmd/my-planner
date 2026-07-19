@@ -57,6 +57,20 @@ function mapAuthError(error) {
   return msg || '인증에 실패했습니다'
 }
 
+function oauthNickname(user) {
+  const metadata = user?.user_metadata || {}
+  return (
+    metadata.full_name ||
+    metadata.name ||
+    user?.email?.split('@')[0] ||
+    'Google 사용자'
+  )
+}
+
+function oauthUserKey(user) {
+  return user.id.replaceAll('-', '')
+}
+
 async function checkLocalSupabaseEnv() {
   try {
     const response = await fetch('/api/auth/env-check')
@@ -73,6 +87,18 @@ async function checkLocalSupabaseEnv() {
     }
     // Production static hosting may not expose this route.
   }
+}
+
+export async function signInWithGoogle() {
+  const supabase = getClient()
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: window.location.origin,
+    },
+  })
+
+  if (error) throw new Error(mapAuthError(error))
 }
 
 function mapRegisterApiError(errorCode, fallback) {
@@ -344,12 +370,31 @@ export async function getAuthenticatedProfile() {
 
   if (!session) return null
 
-  const { data, error } = await supabase
+  const { data: existingProfile, error } = await supabase
     .from('profiles')
     .select('user_key, nickname')
     .eq('auth_user_id', session.user.id)
     .maybeSingle()
 
   if (error) throw error
-  return data
+  if (existingProfile) return existingProfile
+
+  const provider = session.user.app_metadata?.provider
+  if (provider !== 'google') return null
+
+  const { error: claimError } = await supabase.rpc('claim_profile', {
+    p_user_key: oauthUserKey(session.user),
+    p_nickname: oauthNickname(session.user),
+  })
+
+  if (claimError) throw claimError
+
+  const { data: createdProfile, error: profileError } = await supabase
+    .from('profiles')
+    .select('user_key, nickname')
+    .eq('auth_user_id', session.user.id)
+    .single()
+
+  if (profileError) throw profileError
+  return createdProfile
 }

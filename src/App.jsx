@@ -1127,6 +1127,7 @@ function App() {
     loading,
     ready,
     signIn,
+    signInWithGoogle,
     register,
     logout,
     deleteAccount,
@@ -1155,6 +1156,7 @@ function App() {
     return (
       <UserKeyGate
         onSignIn={signIn}
+        onGoogleSignIn={signInWithGoogle}
         onRegister={register}
         onBrowseAsGuest={useGuestMode}
         loading={loading}

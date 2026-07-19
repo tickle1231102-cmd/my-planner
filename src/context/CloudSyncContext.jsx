@@ -10,6 +10,7 @@ import {
 import {
   getAuthenticatedProfile,
   registerWithUserKey,
+  signInWithGoogle as startGoogleSignIn,
   signInWithUserKey,
   signOutAccount,
   deleteAccountRemotely,
@@ -383,6 +384,19 @@ export function CloudSyncProvider({ children }) {
     [runAuthAction],
   )
 
+  const signInWithGoogle = useCallback(async () => {
+    setLoading(true)
+    setError('')
+
+    try {
+      await startGoogleSignIn()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Google 로그인에 실패했습니다')
+      setLoading(false)
+      throw err
+    }
+  }, [])
+
   const register = useCallback(
     (rawKey, password, rawNickname) =>
       runAuthAction(
@@ -642,6 +656,7 @@ export function CloudSyncProvider({ children }) {
       monthlyData,
       memoryData,
       signIn,
+      signInWithGoogle,
       register,
       logout,
       deleteAccount,
@@ -672,6 +687,7 @@ export function CloudSyncProvider({ children }) {
       monthlyData,
       memoryData,
       signIn,
+      signInWithGoogle,
       register,
       logout,
       deleteAccount,
