@@ -282,7 +282,7 @@ export default function TimetableRoutinePanel({ routines, onChange, onClose }) {
                         {formatRoutineDays(routine.daysOfWeek)} {formatRoutineRange(routine)}
                       </p>
                       <p className="text-[10px] text-planner-ink-muted">
-                        ~ {routine.repeatUntil.replaceAll('-', '.')}
+                        ~ {(routine.repeatUntil || '').replaceAll('-', '.')}
                       </p>
                     </div>
                     <button

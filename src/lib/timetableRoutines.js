@@ -38,6 +38,19 @@ function normalizeDaysOfWeek(raw) {
   return [0]
 }
 
+function coerceRoutineList(raw) {
+  if (Array.isArray(raw)) return raw
+  if (raw && typeof raw === 'object') {
+    // Recover arrays corrupted when stampWeeklyChanges spread an array into an object.
+    return Object.keys(raw)
+      .filter((key) => key !== 'updatedAt' && /^\d+$/.test(key))
+      .sort((a, b) => Number(a) - Number(b))
+      .map((key) => raw[key])
+      .filter((item) => item && typeof item === 'object')
+  }
+  return []
+}
+
 function normalizeRoutine(raw, index) {
   const colorId =
     typeof raw?.colorId === 'string' && TIMETABLE_COLOR_BY_ID[raw.colorId]
@@ -69,8 +82,7 @@ function normalizeRoutine(raw, index) {
 }
 
 export function normalizeRoutines(raw) {
-  if (!Array.isArray(raw)) return []
-  return raw.map((routine, index) => normalizeRoutine(routine, index))
+  return coerceRoutineList(raw).map((routine, index) => normalizeRoutine(routine, index))
 }
 
 function slotIndex(hour, slot) {
