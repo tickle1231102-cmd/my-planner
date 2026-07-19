@@ -42,6 +42,7 @@ export default function MemoryView() {
   const [showCategoryPicker, setShowCategoryPicker] = useState(false)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState(() => new Set())
+  const [composeCategory, setComposeCategory] = useState(null)
 
   useEffect(() => {
     setIsEditing(false)
@@ -53,6 +54,7 @@ export default function MemoryView() {
     if (tab !== 'memos') {
       setSelectMode(false)
       setSelectedIds(new Set())
+      setComposeCategory(null)
     }
   }, [tab])
 
@@ -81,18 +83,36 @@ export default function MemoryView() {
   )
 
   const handleCreate = useCallback(
-    async (content) => {
-      const classification = await classifyMemoContent(content)
+    async (content, categorySlug) => {
+      const classification = categorySlug
+        ? null
+        : await classifyMemoContent(content)
       let created = null
       updateMemory((prev) => {
-        const next = createMemoInData(prev, content, classification)
+        const next = createMemoInData(
+          prev,
+          content,
+          classification,
+          categorySlug ? { categorySlug } : undefined,
+        )
         created = next.memos[0] ?? null
         return next
       })
+      if (categorySlug) {
+        setListCategory(categorySlug)
+        setComposeCategory(null)
+      }
       return created
     },
     [updateMemory],
   )
+
+  const handleAddToCategory = useCallback((slug) => {
+    setListCategory(slug)
+    setComposeCategory(slug)
+    setSelectMode(false)
+    setSelectedIds(new Set())
+  }, [])
 
   const handleSelectMemo = useCallback((id) => {
     setSelectedMemoId(id)
@@ -207,9 +227,15 @@ export default function MemoryView() {
   const activeSlug = selectedMemo ? getEffectiveCategorySlug(selectedMemo) : null
 
   return (
-    <div className="space-y-4">
+    <div
+      className={
+        tab === 'map'
+          ? 'flex h-[calc(100dvh-7.5rem)] min-h-[420px] flex-col gap-4 overflow-hidden'
+          : 'space-y-4'
+      }
+    >
       {tab !== 'detail' && (
-        <div className="flex gap-1 rounded-xl border border-planner-sand bg-planner-warm/50 p-1">
+        <div className="sticky top-0 z-20 flex shrink-0 gap-1 rounded-xl border border-planner-sand bg-planner-warm/95 p-1 shadow-soft backdrop-blur">
           {TABS.map((item) => (
             <button
               key={item.id}
@@ -354,8 +380,22 @@ export default function MemoryView() {
           <CategoryFilter
             activeCategory={listCategory}
             counts={categoryCounts}
-            onSelect={setListCategory}
+            onSelect={(slug) => {
+              setListCategory(slug)
+              setComposeCategory(null)
+            }}
+            onAddToCategory={handleAddToCategory}
           />
+
+          {composeCategory && (
+            <QuickCapture
+              key={composeCategory}
+              onCreate={handleCreate}
+              forcedCategory={composeCategory}
+              onCancel={() => setComposeCategory(null)}
+              autoFocus
+            />
+          )}
 
           {filteredMemos.length === 0 ? (
             <p className="rounded-xl border border-dashed border-planner-sand bg-planner-warm/30 p-8 text-center text-sm text-planner-ink-muted">
@@ -384,11 +424,13 @@ export default function MemoryView() {
       )}
 
       {tab === 'map' && (
-        <MemoryMindMap
-          memos={memos}
-          onSelectCategory={handleSelectCategory}
-          onSelectMemo={handleSelectMemo}
-        />
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <MemoryMindMap
+            memos={memos}
+            onSelectCategory={handleSelectCategory}
+            onSelectMemo={handleSelectMemo}
+          />
+        </div>
       )}
 
       {tab === 'detail' && selectedMemo && (

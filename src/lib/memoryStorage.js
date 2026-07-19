@@ -1,5 +1,8 @@
 import { classifyByKeywords } from './memoryClassify.js'
-import { getEffectiveCategorySlug } from './memoryCategories.js'
+import {
+  getEffectiveCategorySlug,
+  resolveCategorySlug,
+} from './memoryCategories.js'
 import { getSavedUserKey, normalizeUserKey } from './userIdentity.js'
 
 export const MEMORY_STORAGE_KEY = 'my-planner-memory-v1'
@@ -112,8 +115,12 @@ export function getMemoById(memos, id) {
   return memos.find((memo) => memo.id === id) ?? null
 }
 
-export function createMemoInData(data, content, classification) {
+export function createMemoInData(data, content, classification, options = {}) {
   const resolved = classification ?? classifyByKeywords(content)
+  const requestedCategory = options.userCategorySlug || options.categorySlug
+  const forcedSlug = requestedCategory
+    ? resolveCategorySlug(requestedCategory)
+    : null
   const now = new Date().toISOString()
   const existingMemos = withDefaultMemory(data).memos
 
@@ -121,10 +128,12 @@ export function createMemoInData(data, content, classification) {
     id: crypto.randomUUID(),
     content,
     title: resolved.title,
-    categorySlug: resolved.slug,
-    userCategorySlug: null,
-    confidence: resolved.confidence,
-    classificationModel: resolved.model || 'keyword-rules-v1',
+    categorySlug: forcedSlug || resolved.slug,
+    userCategorySlug: forcedSlug,
+    confidence: forcedSlug ? 1 : resolved.confidence,
+    classificationModel: forcedSlug
+      ? 'user-selected'
+      : resolved.model || 'keyword-rules-v1',
     createdAt: now,
     updatedAt: now,
   }
