@@ -17,11 +17,10 @@ function buildWeeklyEntryUrl() {
     year: String(weekMonday.getFullYear()),
     week: formatWeekMonday(weekMonday),
   })
-  return `${window.location.pathname}?${params.toString()}`
+  return `/app?${params.toString()}`
 }
 
 function openWeeklyFromNotification() {
-  // Always remount onto this week's Weekly view (ignore stale in-app route).
   window.location.assign(buildWeeklyEntryUrl())
 }
 
@@ -43,8 +42,6 @@ if ('serviceWorker' in navigator) {
   })
 
   window.addEventListener('load', () => {
-    registerPushServiceWorker().catch(() => {
-      // Push is optional; ignore registration failures on unsupported browsers.
-    })
+    registerPushServiceWorker().catch(() => {})
   })
 }

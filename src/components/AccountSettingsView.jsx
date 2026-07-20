@@ -67,7 +67,6 @@ export default function AccountSettingsView({
 }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [helpOpen, setHelpOpen] = useState(false)
   const [pushBusy, setPushBusy] = useState(false)
   const [pushError, setPushError] = useState('')
   const [pushSettings, setPushSettings] = useState(DEFAULT_SETTINGS)
@@ -367,8 +366,8 @@ export default function AccountSettingsView({
           <AccountLinkRow
             icon={HelpIcon}
             label="Help"
-            description={helpOpen ? '도움말 내용은 곧 추가될 예정입니다.' : '도움말 및 안내'}
-            onClick={() => setHelpOpen((open) => !open)}
+            description="제품 소개 및 사용 안내"
+            href="/"
           />
           <AccountLinkRow
             icon={MailIcon}

@@ -143,7 +143,7 @@ export async function handlePushRemindersCron(req) {
           total === unchecked
             ? `오늘 할 일 ${unchecked}개가 아직 남아 있어요. 위클리를 확인해 보세요.`
             : `미완료 할 일 ${unchecked}개가 있어요. 하루가 끝나기 전에 확인해 보세요.`,
-        url: '/?view=weekly',
+        url: '/app?view=weekly',
         tag: `focal-daily-${zoned.dateKey}`,
       }
 

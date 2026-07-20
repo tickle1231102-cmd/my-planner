@@ -21,7 +21,15 @@
       "destination": "/api/push?r=cron"
     },
     {
-      "source": "/((?!api/).*)",
+      "source": "/app",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/privacy",
+      "destination": "/privacy.html"
+    },
+    {
+      "source": "/((?!api/|assets/|icons/|.*\\..*).*)",
       "destination": "/index.html"
     }
   ]

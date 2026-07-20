@@ -9,14 +9,14 @@ self.addEventListener('activate', (event) => {
 })
 
 function weeklyUrl() {
-  return new URL('/?view=weekly', self.location.origin).href
+  return new URL('/app?view=weekly', self.location.origin).href
 }
 
 self.addEventListener('push', (event) => {
   let data = {
     title: 'Focal',
     body: '오늘 미완료 할 일을 확인해 보세요.',
-    url: '/?view=weekly',
+    url: '/app?view=weekly',
     tag: 'focal-reminder',
   }
 
@@ -33,7 +33,7 @@ self.addEventListener('push', (event) => {
     }
   }
 
-  const targetUrl = data.url || '/?view=weekly'
+  const targetUrl = data.url || '/app?view=weekly'
 
   event.waitUntil(
     self.registration.showNotification(data.title || 'Focal', {
@@ -49,7 +49,7 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const targetUrl = event.notification?.data?.url || '/?view=weekly'
+  const targetUrl = event.notification?.data?.url || '/app?view=weekly'
   const absoluteUrl = new URL(targetUrl, self.location.origin).href
 
   event.waitUntil(

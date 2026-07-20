@@ -38,7 +38,12 @@ export default function UserKeyGate({
   loading,
   error,
 }) {
-  const [mode, setMode] = useState('signIn')
+  const [mode, setMode] = useState(() => {
+    if (new URLSearchParams(window.location.search).get('signup') === '1') {
+      return 'signUp'
+    }
+    return 'signIn'
+  })
   const [userKey, setUserKey] = useState('')
   const [nickname, setNickname] = useState('')
   const [password, setPassword] = useState('')
