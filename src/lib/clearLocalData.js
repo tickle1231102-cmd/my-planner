@@ -12,12 +12,17 @@ import {
 } from './mandalaStorage.js'
 import { MONTHLY_STORAGE_KEY, saveMonthlyData } from './monthlyStorage.js'
 import {
+  clearLegacyPlannerLocal,
+  enableLocalScopedMode,
+} from './accountLocalStorage.js'
+import {
   ANNUAL_STORAGE_KEY,
   DEFAULT_COLUMNS,
   saveAnnualToLocal,
   saveWeeklyToLocal,
   WEEKLY_STORAGE_KEY,
 } from './plannerStorage.js'
+import { scopedStorageKey } from './scopedStorageKey.js'
 import { clearUserKey } from './userIdentity.js'
 
 export function createFreshPlannerState() {
@@ -42,12 +47,14 @@ export function createFreshPlannerState() {
 export function resetGuestLocalData(guestUserKey) {
   const fresh = createFreshPlannerState()
 
-  saveAnnualToLocal(fresh.annualData)
-  saveWeeklyToLocal(fresh.weeklyData)
-  clearHabitData()
-  saveHabitData(fresh.habitData)
-  saveMandalaData(fresh.mandalaData)
-  saveMonthlyData(fresh.monthlyData)
+  clearLegacyPlannerLocal()
+  enableLocalScopedMode()
+  saveAnnualToLocal(fresh.annualData, guestUserKey)
+  saveWeeklyToLocal(fresh.weeklyData, guestUserKey)
+  clearHabitData(guestUserKey)
+  saveHabitData(fresh.habitData, guestUserKey)
+  saveMandalaData(fresh.mandalaData, guestUserKey)
+  saveMonthlyData(fresh.monthlyData, guestUserKey)
   clearMemoryData(guestUserKey)
   saveMemoryData(fresh.memoryData, guestUserKey)
 
@@ -55,11 +62,40 @@ export function resetGuestLocalData(guestUserKey) {
 }
 
 export function clearAllLocalPlannerData() {
+  clearLegacyPlannerLocal()
   localStorage.removeItem(ANNUAL_STORAGE_KEY)
   localStorage.removeItem(WEEKLY_STORAGE_KEY)
   clearHabitData()
   localStorage.removeItem(MANDALA_STORAGE_KEY)
   localStorage.removeItem(MONTHLY_STORAGE_KEY)
+
+  // Remove any scoped planner keys for known prefixes.
+  const prefixes = [
+    `${ANNUAL_STORAGE_KEY}:`,
+    `${WEEKLY_STORAGE_KEY}:`,
+    'habit-tracker-v1:',
+    `${MANDALA_STORAGE_KEY}:`,
+    `${MONTHLY_STORAGE_KEY}:`,
+  ]
+  for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+    const key = localStorage.key(i)
+    if (prefixes.some((prefix) => key?.startsWith(prefix))) {
+      localStorage.removeItem(key)
+    }
+  }
+
   clearAllMemoryData()
   clearUserKey()
+}
+
+export function clearActiveAccountLocalCache(userKey) {
+  if (!userKey) {
+    clearLegacyPlannerLocal()
+    return
+  }
+  localStorage.removeItem(scopedStorageKey(ANNUAL_STORAGE_KEY, userKey))
+  localStorage.removeItem(scopedStorageKey(WEEKLY_STORAGE_KEY, userKey))
+  clearHabitData(userKey)
+  localStorage.removeItem(scopedStorageKey(MANDALA_STORAGE_KEY, userKey))
+  localStorage.removeItem(scopedStorageKey(MONTHLY_STORAGE_KEY, userKey))
 }

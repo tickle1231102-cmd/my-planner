@@ -1,5 +1,11 @@
+import { scopedStorageKey } from './scopedStorageKey.js'
+
 export const MANDALA_STORAGE_KEY = 'mandala-planner-v1'
 export const MANDALA_CELL_COUNT = 81
+
+function mandalaStorageKey(userKey) {
+  return scopedStorageKey(MANDALA_STORAGE_KEY, userKey)
+}
 
 export function createDefaultMandalaData(year = new Date().getFullYear()) {
   return {
@@ -26,9 +32,9 @@ export function normalizeMandalaData(raw) {
   }
 }
 
-export function loadMandalaData() {
+export function loadMandalaData(userKey) {
   try {
-    const raw = localStorage.getItem(MANDALA_STORAGE_KEY)
+    const raw = localStorage.getItem(mandalaStorageKey(userKey))
     if (!raw) return createDefaultMandalaData()
     return normalizeMandalaData(JSON.parse(raw))
   } catch {
@@ -36,12 +42,15 @@ export function loadMandalaData() {
   }
 }
 
-export function saveMandalaData(data) {
-  localStorage.setItem(MANDALA_STORAGE_KEY, JSON.stringify(normalizeMandalaData(data)))
+export function saveMandalaData(data, userKey) {
+  localStorage.setItem(
+    mandalaStorageKey(userKey),
+    JSON.stringify(normalizeMandalaData(data)),
+  )
 }
 
-export function hasLocalMandalaData() {
-  const data = loadMandalaData()
+export function hasLocalMandalaData(userKey) {
+  const data = loadMandalaData(userKey)
   if (data.keyword.trim() || data.resolution.trim()) return true
   return data.cells.some((cell) => cell.trim())
 }

@@ -1,5 +1,11 @@
+import { scopedStorageKey } from './scopedStorageKey.js'
+
 export const HABIT_STORAGE_KEY = 'habit-tracker-v1'
 export const DEFAULT_HABIT_COUNT = 8
+
+function habitStorageKey(userKey) {
+  return scopedStorageKey(HABIT_STORAGE_KEY, userKey)
+}
 
 export function monthKey(year, month) {
   return `${year}-${month}`
@@ -44,9 +50,9 @@ export function normalizeMonthData(raw, daysInMonth) {
   return { habits }
 }
 
-export function loadHabitData() {
+export function loadHabitData(userKey) {
   try {
-    const raw = localStorage.getItem(HABIT_STORAGE_KEY)
+    const raw = localStorage.getItem(habitStorageKey(userKey))
     if (!raw) return {}
     return JSON.parse(raw)
   } catch {
@@ -54,16 +60,16 @@ export function loadHabitData() {
   }
 }
 
-export function saveHabitData(data) {
-  localStorage.setItem(HABIT_STORAGE_KEY, JSON.stringify(data))
+export function saveHabitData(data, userKey) {
+  localStorage.setItem(habitStorageKey(userKey), JSON.stringify(data))
 }
 
-export function clearHabitData() {
-  localStorage.removeItem(HABIT_STORAGE_KEY)
+export function clearHabitData(userKey) {
+  localStorage.removeItem(habitStorageKey(userKey))
 }
 
-export function hasLocalHabitData() {
-  const data = loadHabitData()
+export function hasLocalHabitData(userKey) {
+  const data = loadHabitData(userKey)
   return Object.keys(data).length > 0
 }
 

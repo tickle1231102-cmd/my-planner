@@ -1,4 +1,5 @@
 import { annualHasContent } from './annualSyncMerge.js'
+import { scopedStorageKey } from './scopedStorageKey.js'
 import { hasLocalHabitData } from './habitStorage.js'
 
 export const ANNUAL_STORAGE_KEY = 'annual-planner-v1'
@@ -9,9 +10,9 @@ export const DEFAULT_COLUMNS = [
   { id: 'goals', label: '목표' },
 ]
 
-export function loadAnnualFromLocal() {
+export function loadAnnualFromLocal(userKey) {
   try {
-    const raw = localStorage.getItem(ANNUAL_STORAGE_KEY)
+    const raw = localStorage.getItem(scopedStorageKey(ANNUAL_STORAGE_KEY, userKey))
     if (!raw) return null
     return JSON.parse(raw)
   } catch {
@@ -19,9 +20,9 @@ export function loadAnnualFromLocal() {
   }
 }
 
-export function loadWeeklyFromLocal() {
+export function loadWeeklyFromLocal(userKey) {
   try {
-    const raw = localStorage.getItem(WEEKLY_STORAGE_KEY)
+    const raw = localStorage.getItem(scopedStorageKey(WEEKLY_STORAGE_KEY, userKey))
     if (!raw) return {}
     return JSON.parse(raw)
   } catch {
@@ -29,13 +30,19 @@ export function loadWeeklyFromLocal() {
   }
 }
 
-export function saveAnnualToLocal(data) {
+export function saveAnnualToLocal(data, userKey) {
   if (data == null) return
-  localStorage.setItem(ANNUAL_STORAGE_KEY, JSON.stringify(data))
+  localStorage.setItem(
+    scopedStorageKey(ANNUAL_STORAGE_KEY, userKey),
+    JSON.stringify(data),
+  )
 }
 
-export function saveWeeklyToLocal(data) {
-  localStorage.setItem(WEEKLY_STORAGE_KEY, JSON.stringify(data))
+export function saveWeeklyToLocal(data, userKey) {
+  localStorage.setItem(
+    scopedStorageKey(WEEKLY_STORAGE_KEY, userKey),
+    JSON.stringify(data),
+  )
 }
 
 export function isCloudEmpty(cloud) {
@@ -45,9 +52,9 @@ export function isCloudEmpty(cloud) {
   return !annualHasContent(cloud.annual_data) && weeklyEmpty
 }
 
-export function hasLocalData() {
-  const annual = loadAnnualFromLocal()
-  const weekly = loadWeeklyFromLocal()
+export function hasLocalData(userKey) {
+  const annual = loadAnnualFromLocal(userKey)
+  const weekly = loadWeeklyFromLocal(userKey)
   const weeklyHas = weekly && Object.keys(weekly).length > 0
-  return annualHasContent(annual) || weeklyHas || hasLocalHabitData()
+  return annualHasContent(annual) || weeklyHas || hasLocalHabitData(userKey)
 }

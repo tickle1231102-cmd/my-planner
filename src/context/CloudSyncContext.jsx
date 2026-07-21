@@ -16,6 +16,7 @@ import {
   deleteAccountRemotely,
 } from '../lib/authAccount.js'
 import { clearAllLocalPlannerData, resetGuestLocalData } from '../lib/clearLocalData.js'
+import { prepareLocalDataForAccountSwitch } from '../lib/accountLocalStorage.js'
 import { fetchAppData, isSupabaseConfigured, persistAppData } from '../lib/cloudApi.js'
 import { syncWeeklyTodayRoute } from '../lib/appRoute.js'
 import {
@@ -90,13 +91,11 @@ export function CloudSyncProvider({ children }) {
   const [ready, setReady] = useState(false)
   const [localOnly, setLocalOnly] = useState(false)
 
-  const [annualData, setAnnualData] = useState(() =>
-    withDefaultAnnual(loadAnnualFromLocal()),
-  )
-  const [weeklyData, setWeeklyData] = useState(() => loadWeeklyFromLocal())
-  const [habitData, setHabitData] = useState(() => loadHabitData())
-  const [mandalaData, setMandalaData] = useState(() => loadMandalaData())
-  const [monthlyData, setMonthlyData] = useState(() => loadMonthlyData())
+  const [annualData, setAnnualData] = useState(() => withDefaultAnnual({}))
+  const [weeklyData, setWeeklyData] = useState(() => ({}))
+  const [habitData, setHabitData] = useState(() => ({}))
+  const [mandalaData, setMandalaData] = useState(() => createDefaultMandalaData())
+  const [monthlyData, setMonthlyData] = useState(() => ({}))
   const [memoryData, setMemoryData] = useState(() => createEmptyMemoryData())
   const [pullGeneration, setPullGeneration] = useState(0)
 
@@ -104,16 +103,18 @@ export function CloudSyncProvider({ children }) {
   const pendingSaveRef = useRef({})
   const lastPullAtRef = useRef(0)
   const pullInFlightRef = useRef(false)
+  const activeUserKeyRef = useRef(null)
 
   const finishLocalSession = useCallback((key, name = '') => {
     saveUserKey(key)
+    activeUserKeyRef.current = key
     setUserKey(key)
     setNickname(name)
-    setAnnualData(withDefaultAnnual(loadAnnualFromLocal()))
-    setWeeklyData(loadWeeklyFromLocal())
-    setHabitData(loadHabitData())
-    setMandalaData(loadMandalaData())
-    setMonthlyData(loadMonthlyData())
+    setAnnualData(withDefaultAnnual(loadAnnualFromLocal(key)))
+    setWeeklyData(loadWeeklyFromLocal(key))
+    setHabitData(loadHabitData(key))
+    setMandalaData(loadMandalaData(key))
+    setMonthlyData(loadMonthlyData(key))
     setMemoryData(loadMemoryData(key))
     setReady(true)
     setError('')
@@ -123,8 +124,8 @@ export function CloudSyncProvider({ children }) {
     const annual = withDefaultAnnual(cloud.annual_data)
     const weekly = cloud.weekly_data || {}
     const habit = cloud.habit_data || {}
-    const mandala = cloud.mandala_data || loadMandalaData()
-    const monthly = cloud.monthly_data || loadMonthlyData()
+    const mandala = cloud.mandala_data || loadMandalaData(key)
+    const monthly = cloud.monthly_data || loadMonthlyData(key)
     const memory = withDefaultMemory(cloud.memory_data)
 
     setAnnualData(annual)
@@ -134,31 +135,40 @@ export function CloudSyncProvider({ children }) {
     setMonthlyData(monthly)
     setMemoryData(memory)
 
-    saveAnnualToLocal(annual)
-    saveWeeklyToLocal(weekly)
-    saveHabitData(habit)
-    saveMandalaData(mandala)
-    saveMonthlyData(monthly)
+    saveAnnualToLocal(annual, key)
+    saveWeeklyToLocal(weekly, key)
+    saveHabitData(habit, key)
+    saveMandalaData(mandala, key)
+    saveMonthlyData(monthly, key)
     saveMemoryData(memory, key)
   }, [])
 
   const hydrateAfterAuth = useCallback(async (key, name = '', options = {}) => {
     const { isNewAccount = false } = options
+    const { keepLocalMerge } = prepareLocalDataForAccountSwitch(key)
+
     let cloud = await fetchAppData()
-    const localAnnual = loadAnnualFromLocal()
+    const localAnnual = keepLocalMerge ? loadAnnualFromLocal(key) : null
     const cloudAnnual = cloud?.annual_data
-    const mergedAnnual = mergeAnnualData(localAnnual, cloudAnnual)
+    const mergedAnnual = keepLocalMerge
+      ? mergeAnnualData(localAnnual, cloudAnnual)
+      : withDefaultAnnual(cloudAnnual)
     const annualNeedsPush =
+      keepLocalMerge &&
       JSON.stringify(mergedAnnual) !==
-      JSON.stringify(withDefaultAnnual(cloudAnnual))
+        JSON.stringify(withDefaultAnnual(cloudAnnual))
     cloud = { ...cloud, annual_data: mergedAnnual }
 
-    if (isCloudEmpty({ ...cloud, annual_data: cloudAnnual }) && hasLocalData()) {
+    if (
+      keepLocalMerge &&
+      isCloudEmpty({ ...cloud, annual_data: cloudAnnual }) &&
+      hasLocalData(key)
+    ) {
       const annual_data = mergedAnnual
-      const weekly_data = loadWeeklyFromLocal()
-      const habit_data = isNewAccount ? {} : loadHabitData()
-      const mandala_data = loadMandalaData()
-      const monthly_data = loadMonthlyData()
+      const weekly_data = loadWeeklyFromLocal(key)
+      const habit_data = isNewAccount ? {} : loadHabitData(key)
+      const mandala_data = loadMandalaData(key)
+      const monthly_data = loadMonthlyData(key)
       const memory_data = isNewAccount ? createEmptyMemoryData() : loadMemoryData(key)
       cloud = await persistAppData({
         nickname: name || undefined,
@@ -176,22 +186,35 @@ export function CloudSyncProvider({ children }) {
         annual_data: mergedAnnual,
       }
     } else if (
+      keepLocalMerge &&
       !isNewAccount &&
       isHabitDataEmpty(cloud.habit_data) &&
-      hasLocalHabitData()
+      hasLocalHabitData(key)
     ) {
       cloud = await persistAppData({
-        habit_data: loadHabitData(),
+        habit_data: loadHabitData(key),
       })
-    } else if (isMandalaDataEmpty(cloud.mandala_data) && hasLocalMandalaData()) {
+    } else if (
+      keepLocalMerge &&
+      isMandalaDataEmpty(cloud.mandala_data) &&
+      hasLocalMandalaData(key)
+    ) {
       cloud = await persistAppData({
-        mandala_data: loadMandalaData(),
+        mandala_data: loadMandalaData(key),
       })
-    } else if (isMonthlyDataEmpty(cloud.monthly_data) && hasLocalMonthlyData()) {
+    } else if (
+      keepLocalMerge &&
+      isMonthlyDataEmpty(cloud.monthly_data) &&
+      hasLocalMonthlyData(key)
+    ) {
       cloud = await persistAppData({
-        monthly_data: loadMonthlyData(),
+        monthly_data: loadMonthlyData(key),
       })
-    } else if (isMemoryDataEmpty(cloud.memory_data) && hasLocalMemoryData(key)) {
+    } else if (
+      keepLocalMerge &&
+      isMemoryDataEmpty(cloud.memory_data) &&
+      hasLocalMemoryData(key)
+    ) {
       cloud = await persistAppData({
         memory_data: loadMemoryData(key),
       })
@@ -203,11 +226,12 @@ export function CloudSyncProvider({ children }) {
 
     if (isNewAccount) {
       cloud = { ...cloud, habit_data: {}, memory_data: createEmptyMemoryData() }
-      clearHabitData()
+      clearHabitData(key)
       clearMemoryData(key)
     }
 
     saveUserKey(key)
+    activeUserKeyRef.current = key
     setUserKey(key)
     setNickname(profile?.nickname || name || '')
     applyCloudSnapshot(cloud, key)
@@ -219,6 +243,7 @@ export function CloudSyncProvider({ children }) {
   const flushSave = useCallback(async () => {
     const patch = pendingSaveRef.current
     pendingSaveRef.current = {}
+    const scopeKey = activeUserKeyRef.current || userKey
 
     if (!cloudEnabled || localOnly || Object.keys(patch).length === 0) {
       return
@@ -229,28 +254,28 @@ export function CloudSyncProvider({ children }) {
       const data = await persistAppData(patch)
       if (data?.annual_data) {
         setAnnualData(withDefaultAnnual(data.annual_data))
-        saveAnnualToLocal(withDefaultAnnual(data.annual_data))
+        saveAnnualToLocal(withDefaultAnnual(data.annual_data), scopeKey)
       }
       if (data?.weekly_data) {
         setWeeklyData(data.weekly_data)
-        saveWeeklyToLocal(data.weekly_data)
+        saveWeeklyToLocal(data.weekly_data, scopeKey)
       }
       if (data?.habit_data) {
         setHabitData(data.habit_data)
-        saveHabitData(data.habit_data)
+        saveHabitData(data.habit_data, scopeKey)
       }
       if (data?.mandala_data) {
         setMandalaData(data.mandala_data)
-        saveMandalaData(data.mandala_data)
+        saveMandalaData(data.mandala_data, scopeKey)
       }
       if (data?.monthly_data) {
         setMonthlyData(data.monthly_data)
-        saveMonthlyData(data.monthly_data)
+        saveMonthlyData(data.monthly_data, scopeKey)
       }
       if (data?.memory_data) {
         const normalized = withDefaultMemory(data.memory_data)
         setMemoryData(normalized)
-        saveMemoryData(normalized, userKey)
+        saveMemoryData(normalized, scopeKey)
       }
       setError('')
     } catch (err) {
@@ -262,16 +287,17 @@ export function CloudSyncProvider({ children }) {
 
   const scheduleSave = useCallback(
     (patch) => {
-      if (!userKey) return
+      const scopeKey = activeUserKeyRef.current || userKey
+      if (!scopeKey) return
 
       pendingSaveRef.current = { ...pendingSaveRef.current, ...patch }
 
-      if (patch.annual_data) saveAnnualToLocal(patch.annual_data)
-      if (patch.weekly_data) saveWeeklyToLocal(patch.weekly_data)
-      if (patch.habit_data) saveHabitData(patch.habit_data)
-      if (patch.mandala_data) saveMandalaData(patch.mandala_data)
-      if (patch.monthly_data) saveMonthlyData(patch.monthly_data)
-      if (patch.memory_data) saveMemoryData(patch.memory_data, userKey)
+      if (patch.annual_data) saveAnnualToLocal(patch.annual_data, scopeKey)
+      if (patch.weekly_data) saveWeeklyToLocal(patch.weekly_data, scopeKey)
+      if (patch.habit_data) saveHabitData(patch.habit_data, scopeKey)
+      if (patch.mandala_data) saveMandalaData(patch.mandala_data, scopeKey)
+      if (patch.monthly_data) saveMonthlyData(patch.monthly_data, scopeKey)
+      if (patch.memory_data) saveMemoryData(patch.memory_data, scopeKey)
 
       if (!cloudEnabled || localOnly) return
 
@@ -307,10 +333,10 @@ export function CloudSyncProvider({ children }) {
       setSyncing(true)
       try {
         const cloud = await fetchAppData()
-        const localWeekly = loadWeeklyFromLocal()
+        const localWeekly = loadWeeklyFromLocal(userKey)
         const cloudWeekly = cloud?.weekly_data || {}
         const mergedWeekly = mergeWeeklyData(localWeekly, cloudWeekly)
-        const localAnnual = loadAnnualFromLocal()
+        const localAnnual = loadAnnualFromLocal(userKey)
         const cloudAnnual = cloud?.annual_data
         const mergedAnnual = mergeAnnualData(localAnnual, cloudAnnual)
         applyCloudSnapshot(
@@ -408,6 +434,7 @@ export function CloudSyncProvider({ children }) {
 
   const useLocalMode = useCallback(() => {
     setLocalOnly(true)
+    activeUserKeyRef.current = LOCAL_USER_KEY
     finishLocalSession(LOCAL_USER_KEY, sessionNickname(LOCAL_USER_KEY))
     setLoading(false)
   }, [finishLocalSession])
@@ -420,6 +447,7 @@ export function CloudSyncProvider({ children }) {
 
     setLocalOnly(true)
     saveUserKey(GUEST_USER_KEY)
+    activeUserKeyRef.current = GUEST_USER_KEY
     setUserKey(GUEST_USER_KEY)
     setNickname(sessionNickname(GUEST_USER_KEY))
     setAnnualData(withDefaultAnnual(fresh.annualData))
@@ -444,25 +472,23 @@ export function CloudSyncProvider({ children }) {
     const sessionKey = userKey
 
     if (wasCloudSession) {
+      await flushSave()
       await signOutAccount()
-      clearHabitData()
-      if (sessionKey) clearMemoryData(sessionKey)
-    } else if (sessionKey === GUEST_USER_KEY) {
-      clearMemoryData(GUEST_USER_KEY)
     }
 
     clearUserKey()
+    activeUserKeyRef.current = null
     setUserKey(null)
     setNickname('')
     setReady(false)
     setLocalOnly(false)
-    setAnnualData(withDefaultAnnual(loadAnnualFromLocal()))
-    setWeeklyData(loadWeeklyFromLocal())
-    setHabitData(wasCloudSession ? {} : loadHabitData())
-    setMandalaData(loadMandalaData())
-    setMonthlyData(loadMonthlyData())
+    setAnnualData(withDefaultAnnual({}))
+    setWeeklyData({})
+    setHabitData({})
+    setMandalaData(createDefaultMandalaData())
+    setMonthlyData({})
     setMemoryData(createEmptyMemoryData())
-  }, [cloudEnabled, localOnly, userKey])
+  }, [cloudEnabled, flushSave, localOnly, userKey])
 
   const deleteAccount = useCallback(async () => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)

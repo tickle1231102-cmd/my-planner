@@ -30,7 +30,6 @@ import {
 } from './lib/timetableRoutines.js'
 import { buildChecklistDateKeys } from './lib/weeklyChecklist.js'
 
-const WEEKLY_STORAGE_KEY = 'weekly-planner-v2'
 const DAY_LABELS = ['월', '화', '수', '목', '금', '토', '일']
 const START_HOUR = 6
 const HOURS = Array.from({ length: 24 }, (_, i) => (START_HOUR + i) % 24)

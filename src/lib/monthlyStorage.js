@@ -1,4 +1,10 @@
+import { scopedStorageKey } from './scopedStorageKey.js'
+
 export const MONTHLY_STORAGE_KEY = 'monthly-planner-v1'
+
+function monthlyStorageKey(userKey) {
+  return scopedStorageKey(MONTHLY_STORAGE_KEY, userKey)
+}
 
 export function monthStorageKey(year, month) {
   return `${year}-${month}`
@@ -28,9 +34,9 @@ export function setMonthEntry(allData, year, month, entry) {
   return { ...allData, [key]: normalizeMonthEntry(entry) }
 }
 
-export function loadMonthlyData() {
+export function loadMonthlyData(userKey) {
   try {
-    const raw = localStorage.getItem(MONTHLY_STORAGE_KEY)
+    const raw = localStorage.getItem(monthlyStorageKey(userKey))
     if (!raw) return {}
     const parsed = JSON.parse(raw)
     return parsed && typeof parsed === 'object' ? parsed : {}
@@ -39,12 +45,12 @@ export function loadMonthlyData() {
   }
 }
 
-export function saveMonthlyData(data) {
-  localStorage.setItem(MONTHLY_STORAGE_KEY, JSON.stringify(data))
+export function saveMonthlyData(data, userKey) {
+  localStorage.setItem(monthlyStorageKey(userKey), JSON.stringify(data))
 }
 
-export function hasLocalMonthlyData() {
-  return Object.keys(loadMonthlyData()).length > 0
+export function hasLocalMonthlyData(userKey) {
+  return Object.keys(loadMonthlyData(userKey)).length > 0
 }
 
 export function isMonthlyDataEmpty(monthlyData) {
