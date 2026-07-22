@@ -124,7 +124,28 @@ export function hasScopedPlannerLocal(userKey) {
 }
 
 /**
- * Ask how to handle leftover local planner data when entering an account.
+ * Silently optimize local planner data for the account being entered.
+ * Never copies another account's leftovers into nextKey.
+ */
+function autoPrepareLocalData(nextKey, previousKey, legacy) {
+  if (legacy) {
+    const snapshot = readLegacyPlannerSnapshot()
+    if (previousKey && previousKey !== nextKey) {
+      savePlannerSnapshotForAccount(previousKey, snapshot)
+    } else if (previousKey === nextKey) {
+      savePlannerSnapshotForAccount(nextKey, snapshot)
+    }
+    // Unknown-owner legacy is discarded to avoid cross-account leaks.
+    clearLegacyPlannerLocal()
+  }
+
+  enableLocalScopedMode()
+  return { keepLocalMerge: true }
+}
+
+/**
+ * Handle leftover local planner data when entering an account.
+ * Asks at most once on this device; afterwards always auto-optimizes.
  * Returns { keepLocalMerge: boolean } — whether hydrate may upload this account's local to cloud.
  */
 export function prepareLocalDataForAccountSwitch(nextUserKey) {
@@ -138,16 +159,12 @@ export function prepareLocalDataForAccountSwitch(nextUserKey) {
   const switching =
     Boolean(previousKey) && previousKey !== nextKey && hasScopedPlannerLocal(previousKey)
 
-  if (!legacy && !switching && isLocalScopedMode()) {
-    return { keepLocalMerge: true }
+  // Already decided on this device — never prompt again.
+  if (isLocalScopedMode()) {
+    return autoPrepareLocalData(nextKey, previousKey, legacy)
   }
 
-  // Already scoped, same account, no legacy leftovers.
-  if (!legacy && previousKey === nextKey) {
-    enableLocalScopedMode()
-    return { keepLocalMerge: true }
-  }
-
+  // Same account / nothing to decide.
   if (!legacy && !switching) {
     enableLocalScopedMode()
     return { keepLocalMerge: true }
@@ -155,8 +172,8 @@ export function prepareLocalDataForAccountSwitch(nextUserKey) {
 
   const ownerHint = previousKey && previousKey !== nextKey ? previousKey : null
   const message = ownerHint
-    ? `이 기기에 다른 계정(${ownerHint})의 로컬 데이터가 있습니다.\n\n확인: 계정별 저장으로 전환하고 이전 계정 데이터를 그 계정에 보관합니다.\n취소: 이 기기 로컬 플래너 데이터를 비운 뒤 새 계정으로 진행합니다.`
-    : `이 기기에 저장된 로컬 플래너 데이터가 있습니다.\n\n확인: 계정별 저장으로 전환하고 지금 로그인하는 계정(${nextKey})에 보관합니다.\n취소: 이 기기 로컬 플래너 데이터를 비운 뒤 진행합니다.`
+    ? `이 기기에 다른 계정(${ownerHint})의 로컬 데이터가 있습니다.\n\n확인: 계정별 저장으로 전환하고 이전 계정 데이터를 그 계정에 보관합니다.\n취소: 공유 로컬 데이터만 비우고, 이후부터는 계정별로 자동 저장합니다.\n\n이 안내는 이 기기에서 한 번만 표시됩니다.`
+    : `이 기기에 저장된 로컬 플래너 데이터가 있습니다.\n\n확인: 계정별 저장으로 전환하고 지금 로그인하는 계정(${nextKey})에 보관합니다.\n취소: 공유 로컬 데이터를 비우고, 이후부터는 계정별로 자동 저장합니다.\n\n이 안내는 이 기기에서 한 번만 표시됩니다.`
 
   const savePerAccount = window.confirm(message)
 
@@ -175,18 +192,12 @@ export function prepareLocalDataForAccountSwitch(nextUserKey) {
     savePlannerSnapshotForAccount(saveToKey, snapshot)
     clearLegacyPlannerLocal()
     enableLocalScopedMode()
-
-    // Do not upload another account's data into the account being entered.
     return { keepLocalMerge: saveToKey === nextKey }
   }
 
   clearLegacyPlannerLocal()
-  if (ownerHint) {
-    // Keep previous account scoped data; only stop sharing via legacy keys.
-  } else if (previousKey === nextKey) {
+  if (!ownerHint && previousKey === nextKey) {
     clearPlannerLocalForAccount(nextKey)
-  } else if (!previousKey) {
-    // Unknown owner leftovers discarded via legacy clear already.
   }
   enableLocalScopedMode()
   return { keepLocalMerge: false }
