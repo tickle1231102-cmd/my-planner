@@ -59,6 +59,41 @@
   --shadow-cell: inset 0 0 0 1px rgba(237, 232, 224, 0.06);
 }
 
+/*
+ * B&W: achromatic (black / white / gray) base. A single green point color
+ * (--planner-sage family) is kept only for emphasis surfaces such as primary
+ * buttons, active nav items, focus/today rings and accent text; every other
+ * decorative hue collapses to neutral gray.
+ */
+:root[data-theme="bw"] {
+  color-scheme: light;
+
+  --planner-sage: #2f9d6b;
+  --planner-sage-light: #ededef;
+  --planner-sage-muted: #c9c9ce;
+  --planner-mist: #6f6f74;
+  --planner-mist-light: #ededef;
+  --planner-rose: #6f6f74;
+  --planner-rose-light: #ededef;
+  --planner-cream: #f6f6f7;
+  --planner-warm: #eeeeef;
+  --planner-sand: #e0e0e3;
+  --planner-ink: #161618;
+  --planner-ink-muted: #68686d;
+  --planner-today: #eaeaec;
+  --planner-today-ring: #2f9d6b;
+  --planner-weekend: #f0f0f1;
+  --planner-year-gold: #d9d9dd;
+  --planner-sun: #c9c9ce;
+  --planner-peach: #b9b9be;
+  --planner-slate: #4a4a4e;
+  --planner-surface: #ffffff;
+  --planner-month-col: #d3d3d7;
+
+  --shadow-soft: 0 2px 16px rgba(0, 0, 0, 0.06);
+  --shadow-cell: inset 0 0 0 1px rgba(0, 0, 0, 0.07);
+}
+
 @layer base {
   html {
     scroll-behavior: smooth;

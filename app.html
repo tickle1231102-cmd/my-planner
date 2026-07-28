@@ -23,8 +23,9 @@
     <script>
       ;(function () {
         try {
-          if (localStorage.getItem('my-planner-theme') === 'dark') {
-            document.documentElement.setAttribute('data-theme', 'dark')
+          var t = localStorage.getItem('my-planner-theme')
+          if (t === 'dark' || t === 'bw') {
+            document.documentElement.setAttribute('data-theme', t)
           }
         } catch (_) {}
       })()
