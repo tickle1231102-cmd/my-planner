@@ -18,8 +18,13 @@ export async function generateActionPlan(input) {
       payload?.error?.message ||
       payload?.error ||
       `플랜 생성에 실패했습니다 (${response.status})`
-    const error = new Error(message)
-    error.code = payload?.error?.code
+    const code = payload?.error?.code
+    const friendly =
+      code === 'MISSING_GEMINI_API_KEY'
+        ? '서버에 Gemini API 키가 없습니다. Vercel 환경변수에 GEMINI_API_KEY를 추가해 주세요.'
+        : message
+    const error = new Error(friendly)
+    error.code = code
     error.details = payload?.error?.details
     throw error
   }
