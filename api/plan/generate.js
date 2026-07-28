@@ -1,4 +1,9 @@
-import { handlePlanGenerateRequest } from '../server/planGenerate.js'
+import { handlePlanGenerateRequest } from '../../server/planGenerate.js'
+
+// Allow longer Gemini generation on Vercel (Pro); Hobby caps lower automatically.
+export const config = {
+  maxDuration: 60,
+}
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -22,6 +27,7 @@ export default async function handler(req, res) {
     const result = await handlePlanGenerateRequest(body)
     return res.status(result.status).json(result.body)
   } catch (error) {
+    console.error('[api/plan/generate]', error)
     const message = error instanceof Error ? error.message : 'server error'
     return res.status(500).json({ error: { message, code: 'INTERNAL_ERROR' } })
   }
