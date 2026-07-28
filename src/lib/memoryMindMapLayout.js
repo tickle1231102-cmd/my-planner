@@ -237,5 +237,33 @@ export function buildMindMapGraph(memos) {
     }
   }
 
-  return { nodes, edges, width: BASE_WIDTH, height: BASE_HEIGHT }
+  const padding = 80
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+
+  for (const node of nodes) {
+    const { w, h } = nodeHalfSize(node.type)
+    minX = Math.min(minX, node.x - w)
+    minY = Math.min(minY, node.y - h)
+    maxX = Math.max(maxX, node.x + w)
+    maxY = Math.max(maxY, node.y + h)
+  }
+
+  minX = Math.min(minX, 0) - padding
+  minY = Math.min(minY, 0) - padding
+  maxX = Math.max(maxX, BASE_WIDTH) + padding
+  maxY = Math.max(maxY, BASE_HEIGHT) + padding
+
+  const width = maxX - minX
+  const height = maxY - minY
+
+  return {
+    nodes,
+    edges,
+    width,
+    height,
+    viewBox: `${minX} ${minY} ${width} ${height}`,
+  }
 }

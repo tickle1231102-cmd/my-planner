@@ -1,4 +1,4 @@
-import { getClient } from './supabaseBrowser.js'
+import { getClient, getSupabaseConfig } from './supabaseBrowser.js'
 import {
   LEGACY_AUTH_EMAIL_SUFFIX,
   userKeyToAuthEmailCandidates,
@@ -52,6 +52,17 @@ function mapAuthError(error) {
   }
   if (msg.toLowerCase().includes('password')) {
     return getPasswordHint()
+  }
+
+  if (
+    msg.includes('provider is not enabled') ||
+    msg.includes('Unsupported provider')
+  ) {
+    const { url } = getSupabaseConfig()
+    const projectHint = url
+      ? ` (현재 앱 프로젝트: ${url.replace(/^https?:\/\//, '').replace(/\.supabase\.co.*/, '')})`
+      : ''
+    return `Google 로그인이 이 Supabase 프로젝트에서 아직 켜져 있지 않습니다${projectHint}. Dashboard → Authentication → Providers → Google을 Enable 하고 Client ID/Secret을 저장해 주세요.`
   }
 
   return msg || '인증에 실패했습니다'

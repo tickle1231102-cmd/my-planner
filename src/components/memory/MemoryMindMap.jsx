@@ -74,14 +74,10 @@ export function MemoryMindMap({ memos, onSelectCategory, onSelectMemo }) {
   const graph = useMemo(() => buildMindMapGraph(memos), [memos])
 
   useEffect(() => {
-    const element = containerRef.current
-    if (!element || memos.length === 0) return
-    const pad = 48
-    const sx = (element.clientWidth - pad * 2) / graph.width
-    const sy = (element.clientHeight - pad * 2) / graph.height
-    setScale(Math.min(1.15, Math.max(0.35, Math.min(sx, sy))))
+    if (memos.length === 0) return
+    setScale(1)
     setOffset({ x: 0, y: 0 })
-  }, [graph.width, graph.height, memos.length])
+  }, [graph.viewBox, memos.length])
 
   // Non-passive wheel so preventDefault stops parent page scroll (tabs stay fixed)
   useEffect(() => {
@@ -141,12 +137,7 @@ export function MemoryMindMap({ memos, onSelectCategory, onSelectMemo }) {
   )
 
   const fitView = () => {
-    const element = containerRef.current
-    if (!element) return
-    const pad = 48
-    const sx = (element.clientWidth - pad * 2) / graph.width
-    const sy = (element.clientHeight - pad * 2) / graph.height
-    setScale(Math.min(1.15, Math.max(0.35, Math.min(sx, sy))))
+    setScale(1)
     setOffset({ x: 0, y: 0 })
   }
 
@@ -217,7 +208,8 @@ export function MemoryMindMap({ memos, onSelectCategory, onSelectMemo }) {
           <svg
             width="100%"
             height="100%"
-            viewBox={`0 0 ${graph.width} ${graph.height}`}
+            viewBox={graph.viewBox}
+            preserveAspectRatio="xMidYMid meet"
             className="h-full w-full min-h-[420px]"
           >
             {graph.edges.map((edge) => (

@@ -21,6 +21,7 @@ import { MemoryMindMap } from './components/memory/MemoryMindMap.jsx'
 import { CategoryPicker } from './components/memory/CategoryPicker.jsx'
 import { QuickCapture } from './components/memory/QuickCapture.jsx'
 import { ImeSafeTextarea } from './components/ImeSafeTextarea.jsx'
+import { PlusIcon } from './components/PlusIcon.jsx'
 import { TrashIcon } from './components/TrashIcon.jsx'
 
 const TABS = [
@@ -42,7 +43,7 @@ export default function MemoryView() {
   const [showCategoryPicker, setShowCategoryPicker] = useState(false)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState(() => new Set())
-  const [composeCategory, setComposeCategory] = useState(null)
+  const [composeOpen, setComposeOpen] = useState(false)
 
   useEffect(() => {
     setIsEditing(false)
@@ -54,7 +55,7 @@ export default function MemoryView() {
     if (tab !== 'memos') {
       setSelectMode(false)
       setSelectedIds(new Set())
-      setComposeCategory(null)
+      setComposeOpen(false)
     }
   }, [tab])
 
@@ -100,16 +101,15 @@ export default function MemoryView() {
       })
       if (categorySlug) {
         setListCategory(categorySlug)
-        setComposeCategory(null)
       }
+      setComposeOpen(false)
       return created
     },
     [updateMemory],
   )
 
-  const handleAddToCategory = useCallback((slug) => {
-    setListCategory(slug)
-    setComposeCategory(slug)
+  const handleToggleCompose = useCallback(() => {
+    setComposeOpen((open) => !open)
     setSelectMode(false)
     setSelectedIds(new Set())
   }, [])
@@ -326,25 +326,47 @@ export default function MemoryView() {
                   : `${filteredMemos.length}개의 메모`}
               </p>
             </div>
-            {filteredMemos.length > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (selectMode) exitSelectMode()
-                  else enterSelectMode()
-                }}
-                aria-label={selectMode ? '선택 취소' : '메모 선택 삭제'}
-                aria-pressed={selectMode}
-                className={[
-                  'rounded-lg p-2 transition',
-                  selectMode
-                    ? 'bg-planner-rose-light text-planner-rose'
-                    : 'text-planner-ink-muted hover:bg-planner-warm hover:text-planner-rose',
-                ].join(' ')}
-              >
-                <TrashIcon className="size-5" />
-              </button>
-            )}
+            <div className="flex shrink-0 items-center gap-1">
+              {!selectMode && (
+                <button
+                  type="button"
+                  onClick={handleToggleCompose}
+                  aria-label={
+                    listCategory
+                      ? `${listCategory} 카테고리에 메모 추가`
+                      : '메모 추가'
+                  }
+                  aria-pressed={composeOpen}
+                  className={[
+                    'rounded-lg p-2 transition',
+                    composeOpen
+                      ? 'bg-planner-sage-light text-planner-sage'
+                      : 'text-planner-ink-muted hover:bg-planner-warm hover:text-planner-sage',
+                  ].join(' ')}
+                >
+                  <PlusIcon className="size-5" />
+                </button>
+              )}
+              {filteredMemos.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (selectMode) exitSelectMode()
+                    else enterSelectMode()
+                  }}
+                  aria-label={selectMode ? '선택 취소' : '메모 선택 삭제'}
+                  aria-pressed={selectMode}
+                  className={[
+                    'rounded-lg p-2 transition',
+                    selectMode
+                      ? 'bg-planner-rose-light text-planner-rose'
+                      : 'text-planner-ink-muted hover:bg-planner-warm hover:text-planner-rose',
+                  ].join(' ')}
+                >
+                  <TrashIcon className="size-5" />
+                </button>
+              )}
+            </div>
           </div>
 
           {selectMode && (
@@ -380,19 +402,15 @@ export default function MemoryView() {
           <CategoryFilter
             activeCategory={listCategory}
             counts={categoryCounts}
-            onSelect={(slug) => {
-              setListCategory(slug)
-              setComposeCategory(null)
-            }}
-            onAddToCategory={handleAddToCategory}
+            onSelect={setListCategory}
           />
 
-          {composeCategory && (
+          {composeOpen && (
             <QuickCapture
-              key={composeCategory}
+              key={listCategory ?? 'all'}
               onCreate={handleCreate}
-              forcedCategory={composeCategory}
-              onCancel={() => setComposeCategory(null)}
+              forcedCategory={listCategory}
+              onCancel={() => setComposeOpen(false)}
               autoFocus
             />
           )}
