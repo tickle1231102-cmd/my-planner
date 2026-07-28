@@ -9,6 +9,7 @@ import {
 } from './server/auth.js'
 import { getSupabaseEnvIssue } from './server/supabaseEnv.js'
 import { handleClassifyMemoRequest } from './server/classifyMemo.js'
+import { handlePlanGenerateRequest } from './server/planGenerate.js'
 import { handleDataRequest } from './server/cloudData.js'
 import {
   handlePushGetSettings,
@@ -110,6 +111,13 @@ export function cloudApiDevPlugin() {
           if (req.url?.startsWith('/api/classify-memo') && req.method === 'POST') {
             const body = await readBody(req)
             const result = await handleClassifyMemoRequest(body)
+            sendJson(res, result.status, result.body)
+            return
+          }
+
+          if (req.url?.startsWith('/api/plan/generate') && req.method === 'POST') {
+            const body = await readBody(req)
+            const result = await handlePlanGenerateRequest(body)
             sendJson(res, result.status, result.body)
             return
           }

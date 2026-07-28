@@ -29,6 +29,7 @@ import {
   toDateKey,
 } from './lib/timetableRoutines.js'
 import { buildChecklistDateKeys } from './lib/weeklyChecklist.js'
+import { syncWeeklyDoneToGoalPlan } from './lib/goalPlanWeeklySync.js'
 
 const DAY_LABELS = ['월', '화', '수', '목', '금', '토', '일']
 const START_HOUR = 6
@@ -316,7 +317,7 @@ function normalizeWeekData(raw) {
 }
 
 function useWeeklyStorage(weekId, weekMonday) {
-  const { weeklyData, updateWeekly, pullGeneration } = useCloudSync()
+  const { weeklyData, updateWeekly, updateGoalPlan, pullGeneration } = useCloudSync()
   const remoteWeek = useMemo(
     () => normalizeWeekData(weeklyData[weekId]),
     [weeklyData, weekId],
@@ -381,8 +382,16 @@ function useWeeklyStorage(weekId, weekMonday) {
           ),
         },
       }))
+
+      if (
+        Object.prototype.hasOwnProperty.call(updates, 'done') &&
+        typeof taskId === 'string' &&
+        taskId.startsWith('gd-')
+      ) {
+        updateGoalPlan((prev) => syncWeeklyDoneToGoalPlan(prev, taskId, !!updates.done))
+      }
     },
-    [setWeekData],
+    [setWeekData, updateGoalPlan],
   )
 
   const setSlotFilled = useCallback(

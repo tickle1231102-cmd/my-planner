@@ -11,6 +11,7 @@ import MonthlyView from './MonthlyView.jsx'
 import YearOverviewCalendar from './YearOverviewCalendar.jsx'
 import HabitTracker from './HabitTracker.jsx'
 import MemoryView from './MemoryView.jsx'
+import GoalPlanView from './GoalPlanView.jsx'
 import MandalartView from './MandalartView.jsx'
 import UserKeyGate from './components/UserKeyGate.jsx'
 import { ImeSafeTextarea } from './components/ImeSafeTextarea.jsx'
@@ -1408,7 +1409,7 @@ function PlannerApp({ logout, deleteAccount, syncing, userKey, nickname, localOn
     if (view === 'yearOverview') {
       setView('annual')
     }
-    if (view === 'mandala' || view === 'habit' || view === 'memory') {
+    if (view === 'mandala' || view === 'habit' || view === 'memory' || view === 'goalPlan') {
       setView('annual')
     }
     if (view === 'monthly') {
@@ -1464,7 +1465,9 @@ function PlannerApp({ logout, deleteAccount, syncing, userKey, nickname, localOn
             ? 'habit'
             : view === 'memory'
               ? 'memory'
-              : 'yearly'
+              : view === 'goalPlan'
+                ? 'goalPlan'
+                : 'yearly'
   const headerTitle =
     view === 'mandala'
       ? 'Mandal-Art'
@@ -1472,6 +1475,8 @@ function PlannerApp({ logout, deleteAccount, syncing, userKey, nickname, localOn
         ? 'Habit Tracker'
         : view === 'memory'
           ? 'My Memory'
+          : view === 'goalPlan'
+            ? 'AI Plan'
           : view === 'yearOverview'
           ? 'Calendar'
           : 'Yearly'
@@ -1488,6 +1493,8 @@ function PlannerApp({ logout, deleteAccount, syncing, userKey, nickname, localOn
         ? '한 달 습관을 주차별로 추적하세요'
         : view === 'memory'
           ? '생각나는 대로 적으면 키워드로 자동 분류됩니다'
+          : view === 'goalPlan'
+            ? '목표를 연·월·주·일로 분해하고 Weekly에 자동 반영합니다'
           : view === 'yearOverview'
           ? '12개월 Calendar · 날짜를 누르면 Weekly로 이동합니다'
           : '날짜를 눌러 Weekly로 이동하세요'
@@ -1673,6 +1680,8 @@ function PlannerApp({ logout, deleteAccount, syncing, userKey, nickname, localOn
             <HabitTracker today={today} />
           ) : view === 'memory' ? (
             <MemoryView />
+          ) : view === 'goalPlan' ? (
+            <GoalPlanView onGoWeekly={() => navigateToAppView('weekly')} />
           ) : (
             <>
           {year === today.getFullYear() && (

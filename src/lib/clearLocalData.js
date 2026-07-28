@@ -6,6 +6,12 @@ import {
   saveMemoryData,
 } from './memoryStorage.js'
 import {
+  clearAllGoalPlanData,
+  clearGoalPlanData,
+  createEmptyGoalPlanData,
+  saveGoalPlanData,
+} from './goalPlanStorage.js'
+import {
   createDefaultMandalaData,
   MANDALA_STORAGE_KEY,
   saveMandalaData,
@@ -40,6 +46,7 @@ export function createFreshPlannerState() {
     mandalaData: createDefaultMandalaData(),
     monthlyData: {},
     memoryData: createEmptyMemoryData(),
+    goalPlanData: createEmptyGoalPlanData(),
   }
 }
 
@@ -57,6 +64,8 @@ export function resetGuestLocalData(guestUserKey) {
   saveMonthlyData(fresh.monthlyData, guestUserKey)
   clearMemoryData(guestUserKey)
   saveMemoryData(fresh.memoryData, guestUserKey)
+  clearGoalPlanData(guestUserKey)
+  saveGoalPlanData(fresh.goalPlanData, guestUserKey)
 
   return fresh
 }
@@ -85,6 +94,7 @@ export function clearAllLocalPlannerData() {
   }
 
   clearAllMemoryData()
+  clearAllGoalPlanData()
   clearUserKey()
 }
 
@@ -98,4 +108,6 @@ export function clearActiveAccountLocalCache(userKey) {
   clearHabitData(userKey)
   localStorage.removeItem(scopedStorageKey(MANDALA_STORAGE_KEY, userKey))
   localStorage.removeItem(scopedStorageKey(MONTHLY_STORAGE_KEY, userKey))
+  clearMemoryData(userKey)
+  clearGoalPlanData(userKey)
 }
