@@ -22,7 +22,9 @@ export async function generateActionPlan(input) {
     const friendly =
       code === 'MISSING_GEMINI_API_KEY'
         ? '서버에 Gemini API 키가 없습니다. Vercel 환경변수에 GEMINI_API_KEY를 추가해 주세요.'
-        : message
+        : code === 'GEMINI_QUOTA_EXCEEDED'
+          ? 'Gemini API 할당량이 초과되었습니다. 잠시 후 다시 시도하거나 Google AI Studio에서 할당량을 확인해 주세요.'
+          : message
     const error = new Error(friendly)
     error.code = code
     error.details = payload?.error?.details

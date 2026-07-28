@@ -15,7 +15,7 @@ const SCOPE_LABELS = {
   LONG_TERM: '1 year or more',
 }
 
-const DEFAULT_MODEL = 'gemini-2.0-flash'
+const DEFAULT_MODEL = 'gemini-2.0-flash-lite'
 
 function formatExcludedWeekdays(weekdays) {
   if (!weekdays?.length) return 'None'
@@ -140,6 +140,14 @@ async function generateActionPlanWithGemini(input) {
 
   if (!response.ok) {
     const detail = await response.text().catch(() => '')
+    if (response.status === 429) {
+      const err = new Error(
+        'Gemini API 할당량이 초과되었습니다. Google AI Studio에서 할당량/결제 상태를 확인하거나, 잠시 후 다시 시도해 주세요.',
+      )
+      err.code = 'GEMINI_QUOTA_EXCEEDED'
+      err.detail = detail.slice(0, 300)
+      throw err
+    }
     throw new Error(`Gemini HTTP ${response.status}: ${detail.slice(0, 300)}`)
   }
 
@@ -209,9 +217,13 @@ export async function handlePlanGenerateRequest(body) {
     const message =
       error instanceof Error ? error.message : 'Failed to generate action plan.'
     const code =
-      error instanceof ZodError ? 'VALIDATION_ERROR' : 'INTERNAL_ERROR'
+      error?.code === 'GEMINI_QUOTA_EXCEEDED'
+        ? 'GEMINI_QUOTA_EXCEEDED'
+        : error instanceof ZodError
+          ? 'VALIDATION_ERROR'
+          : 'INTERNAL_ERROR'
     return {
-      status: 500,
+      status: code === 'GEMINI_QUOTA_EXCEEDED' ? 429 : 500,
       body: {
         error: {
           message,
