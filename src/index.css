@@ -60,35 +60,42 @@
 }
 
 /*
- * B&W: achromatic (black / white / gray) base. A single green point color
- * (--planner-sage family) is kept only for emphasis surfaces such as primary
- * buttons, active nav items, focus/today rings and accent text; every other
- * decorative hue collapses to neutral gray.
+ * B&W: a minimal black / white / gray CHROME (crisp neutral surfaces, near-black
+ * text, black primary buttons & emphasis) that keeps VIVID point colors for
+ * functional accents (blue / rose / amber / green highlights, category chips,
+ * status). The neutral base is monochrome; the accents stay in color.
  */
 :root[data-theme="bw"] {
   color-scheme: light;
 
-  --planner-sage: #2f9d6b;
-  --planner-sage-light: #ededef;
-  --planner-sage-muted: #c9c9ce;
-  --planner-mist: #6f6f74;
-  --planner-mist-light: #ededef;
-  --planner-rose: #6f6f74;
-  --planner-rose-light: #ededef;
-  --planner-cream: #f6f6f7;
-  --planner-warm: #eeeeef;
-  --planner-sand: #e0e0e3;
-  --planner-ink: #161618;
-  --planner-ink-muted: #68686d;
-  --planner-today: #eaeaec;
-  --planner-today-ring: #2f9d6b;
-  --planner-weekend: #f0f0f1;
-  --planner-year-gold: #d9d9dd;
-  --planner-sun: #c9c9ce;
-  --planner-peach: #b9b9be;
-  --planner-slate: #4a4a4e;
+  /* Emphasis / primary action -> monochrome black (buttons, active tabs, links) */
+  --planner-sage: #18181b;
+  --planner-sage-light: #f2f2f4;
+  --planner-sage-muted: #d3d3d8;
+
+  /* Vivid functional accents kept in color */
+  --planner-mist: #3b82f6;
+  --planner-mist-light: #eaf1fe;
+  --planner-rose: #e2635b;
+  --planner-rose-light: #fdecea;
+
+  /* Neutral base surfaces / text */
+  --planner-cream: #f7f7f8;
+  --planner-warm: #f1f1f3;
+  --planner-sand: #e5e5e8;
+  --planner-ink: #18181b;
+  --planner-ink-muted: #71717a;
+  --planner-slate: #52525b;
   --planner-surface: #ffffff;
-  --planner-month-col: #d3d3d7;
+  --planner-weekend: #f4f4f5;
+  --planner-month-col: #e3e3e7;
+
+  /* Green stays for today / done, amber-orange for gold accents */
+  --planner-today: #dcf5e6;
+  --planner-today-ring: #16a34a;
+  --planner-year-gold: #f2d488;
+  --planner-sun: #f5b301;
+  --planner-peach: #fb8f5a;
 
   --shadow-soft: 0 2px 16px rgba(0, 0, 0, 0.06);
   --shadow-cell: inset 0 0 0 1px rgba(0, 0, 0, 0.07);

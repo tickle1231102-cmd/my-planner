@@ -16,7 +16,7 @@ export const THEMES = {
   bw: {
     id: 'bw',
     label: '흑백 (B&W)',
-    description: '무채색 베이스에 포인트 컬러만 강조하는 테마',
+    description: '흑백 베이스에 선명한 포인트 컬러를 더한 미니멀 테마',
     metaColor: '#F7F7F8',
   },
 }
