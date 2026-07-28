@@ -85,6 +85,8 @@ export async function saveAppData(userKey, payload = {}) {
   if (payload.habit_data !== undefined) patch.habit_data = payload.habit_data
   if (payload.mandala_data !== undefined) patch.mandala_data = payload.mandala_data
   if (payload.monthly_data !== undefined) patch.monthly_data = payload.monthly_data
+  if (payload.memory_data !== undefined) patch.memory_data = payload.memory_data
+  if (payload.goal_plan_data !== undefined) patch.goal_plan_data = payload.goal_plan_data
 
   const supabase = getAdminClient()
 
@@ -118,6 +120,8 @@ export async function handleDataRequest(method, url, body) {
       habit_data: body?.habit_data,
       mandala_data: body?.mandala_data,
       monthly_data: body?.monthly_data,
+      memory_data: body?.memory_data,
+      goal_plan_data: body?.goal_plan_data,
     })
   }
 

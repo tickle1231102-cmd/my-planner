@@ -110,6 +110,15 @@ export const FEATURES = [
     audience: '아이디어와 회고를 쌓는 사람',
     preview: 'memory',
   },
+  {
+    id: 'goalPlan',
+    label: 'AI Plan',
+    title: '목표를 실행 단위로 분해',
+    description: 'AI가 목표를 연·월·주·일 할 일로 나누고 Weekly에 자동으로 채워 줍니다.',
+    bullets: ['연·월·주·일 계층 플랜', '쉬는 날 제외', 'Weekly 할 일 자동 연동'],
+    audience: '큰 목표를 매일의 행동으로 바꾸고 싶은 사람',
+    preview: 'yearly',
+  },
 ]
 
 export const STEPS = [

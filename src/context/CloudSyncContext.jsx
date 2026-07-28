@@ -49,6 +49,15 @@ import {
   withDefaultMemory,
 } from '../lib/memoryStorage.js'
 import {
+  clearGoalPlanData,
+  createEmptyGoalPlanData,
+  hasLocalGoalPlanData,
+  isGoalPlanDataEmpty,
+  loadGoalPlanData,
+  saveGoalPlanData,
+  withDefaultGoalPlan,
+} from '../lib/goalPlanStorage.js'
+import {
   hasLocalData,
   isCloudEmpty,
   loadAnnualFromLocal,
@@ -97,6 +106,7 @@ export function CloudSyncProvider({ children }) {
   const [mandalaData, setMandalaData] = useState(() => createDefaultMandalaData())
   const [monthlyData, setMonthlyData] = useState(() => ({}))
   const [memoryData, setMemoryData] = useState(() => createEmptyMemoryData())
+  const [goalPlanData, setGoalPlanData] = useState(() => createEmptyGoalPlanData())
   const [pullGeneration, setPullGeneration] = useState(0)
 
   const saveTimerRef = useRef(null)
@@ -116,6 +126,7 @@ export function CloudSyncProvider({ children }) {
     setMandalaData(loadMandalaData(key))
     setMonthlyData(loadMonthlyData(key))
     setMemoryData(loadMemoryData(key))
+    setGoalPlanData(loadGoalPlanData(key))
     setReady(true)
     setError('')
   }, [])
@@ -127,6 +138,7 @@ export function CloudSyncProvider({ children }) {
     const mandala = cloud.mandala_data || loadMandalaData(key)
     const monthly = cloud.monthly_data || loadMonthlyData(key)
     const memory = withDefaultMemory(cloud.memory_data)
+    const goalPlan = withDefaultGoalPlan(cloud.goal_plan_data)
 
     setAnnualData(annual)
     setWeeklyData(weekly)
@@ -134,6 +146,7 @@ export function CloudSyncProvider({ children }) {
     setMandalaData(mandala)
     setMonthlyData(monthly)
     setMemoryData(memory)
+    setGoalPlanData(goalPlan)
 
     saveAnnualToLocal(annual, key)
     saveWeeklyToLocal(weekly, key)
@@ -141,6 +154,7 @@ export function CloudSyncProvider({ children }) {
     saveMandalaData(mandala, key)
     saveMonthlyData(monthly, key)
     saveMemoryData(memory, key)
+    saveGoalPlanData(goalPlan, key)
   }, [])
 
   const hydrateAfterAuth = useCallback(async (key, name = '', options = {}) => {
@@ -170,6 +184,9 @@ export function CloudSyncProvider({ children }) {
       const mandala_data = loadMandalaData(key)
       const monthly_data = loadMonthlyData(key)
       const memory_data = isNewAccount ? createEmptyMemoryData() : loadMemoryData(key)
+      const goal_plan_data = isNewAccount
+        ? createEmptyGoalPlanData()
+        : loadGoalPlanData(key)
       cloud = await persistAppData({
         nickname: name || undefined,
         annual_data,
@@ -178,6 +195,7 @@ export function CloudSyncProvider({ children }) {
         mandala_data,
         monthly_data,
         memory_data,
+        goal_plan_data,
       })
     } else if (annualNeedsPush) {
       // Local annual had content cloud was missing — push merged result.
@@ -218,6 +236,14 @@ export function CloudSyncProvider({ children }) {
       cloud = await persistAppData({
         memory_data: loadMemoryData(key),
       })
+    } else if (
+      keepLocalMerge &&
+      isGoalPlanDataEmpty(cloud.goal_plan_data) &&
+      hasLocalGoalPlanData(key)
+    ) {
+      cloud = await persistAppData({
+        goal_plan_data: loadGoalPlanData(key),
+      })
     } else if (name) {
       cloud = await persistAppData({ nickname: name })
     }
@@ -225,9 +251,15 @@ export function CloudSyncProvider({ children }) {
     const profile = await getAuthenticatedProfile()
 
     if (isNewAccount) {
-      cloud = { ...cloud, habit_data: {}, memory_data: createEmptyMemoryData() }
+      cloud = {
+        ...cloud,
+        habit_data: {},
+        memory_data: createEmptyMemoryData(),
+        goal_plan_data: createEmptyGoalPlanData(),
+      }
       clearHabitData(key)
       clearMemoryData(key)
+      clearGoalPlanData(key)
     }
 
     saveUserKey(key)
@@ -277,6 +309,11 @@ export function CloudSyncProvider({ children }) {
         setMemoryData(normalized)
         saveMemoryData(normalized, scopeKey)
       }
+      if (data?.goal_plan_data) {
+        const normalized = withDefaultGoalPlan(data.goal_plan_data)
+        setGoalPlanData(normalized)
+        saveGoalPlanData(normalized, scopeKey)
+      }
       setError('')
     } catch (err) {
       setError(err instanceof Error ? err.message : '동기화 실패')
@@ -298,6 +335,7 @@ export function CloudSyncProvider({ children }) {
       if (patch.mandala_data) saveMandalaData(patch.mandala_data, scopeKey)
       if (patch.monthly_data) saveMonthlyData(patch.monthly_data, scopeKey)
       if (patch.memory_data) saveMemoryData(patch.memory_data, scopeKey)
+      if (patch.goal_plan_data) saveGoalPlanData(patch.goal_plan_data, scopeKey)
 
       if (!cloudEnabled || localOnly) return
 
@@ -665,6 +703,20 @@ export function CloudSyncProvider({ children }) {
     [scheduleSave],
   )
 
+  const updateGoalPlan = useCallback(
+    (updater) => {
+      setGoalPlanData((prev) => {
+        const safePrev = withDefaultGoalPlan(prev)
+        const next =
+          typeof updater === 'function' ? updater(safePrev) : withDefaultGoalPlan(updater)
+        const normalized = withDefaultGoalPlan(next)
+        scheduleSave({ goal_plan_data: normalized })
+        return normalized
+      })
+    },
+    [scheduleSave],
+  )
+
   const value = useMemo(
     () => ({
       userKey,
@@ -681,6 +733,7 @@ export function CloudSyncProvider({ children }) {
       mandalaData,
       monthlyData,
       memoryData,
+      goalPlanData,
       signIn,
       signInWithGoogle,
       register,
@@ -694,6 +747,7 @@ export function CloudSyncProvider({ children }) {
       updateMandala,
       updateMonthly,
       updateMemory,
+      updateGoalPlan,
       pullFromCloud,
       pullGeneration,
     }),
@@ -712,6 +766,7 @@ export function CloudSyncProvider({ children }) {
       mandalaData,
       monthlyData,
       memoryData,
+      goalPlanData,
       signIn,
       signInWithGoogle,
       register,
@@ -725,6 +780,7 @@ export function CloudSyncProvider({ children }) {
       updateMandala,
       updateMonthly,
       updateMemory,
+      updateGoalPlan,
       pullFromCloud,
       pullGeneration,
     ],

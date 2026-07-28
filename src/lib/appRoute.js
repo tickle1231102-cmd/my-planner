@@ -1,6 +1,6 @@
 import { getMondayOfWeek } from './weeklyChecklist.js'
 
-const VALID_VIEWS = new Set(['annual', 'yearOverview', 'weekly', 'habit', 'mandala', 'monthly', 'memory', 'account'])
+const VALID_VIEWS = new Set(['annual', 'yearOverview', 'weekly', 'habit', 'mandala', 'monthly', 'memory', 'goalPlan', 'account'])
 
 export function formatWeekMonday(date) {
   const year = date.getFullYear()
