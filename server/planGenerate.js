@@ -15,7 +15,7 @@ const SCOPE_LABELS = {
   LONG_TERM: '1 year or more',
 }
 
-const DEFAULT_MODEL = 'gemini-2.0-flash-lite'
+const DEFAULT_MODEL = 'gemini-3.1-flash-lite'
 
 function formatExcludedWeekdays(weekdays) {
   if (!weekdays?.length) return 'None'
@@ -145,6 +145,14 @@ async function generateActionPlanWithGemini(input) {
         'Gemini API 할당량이 초과되었습니다. Google AI Studio에서 할당량/결제 상태를 확인하거나, 잠시 후 다시 시도해 주세요.',
       )
       err.code = 'GEMINI_QUOTA_EXCEEDED'
+      err.detail = detail.slice(0, 300)
+      throw err
+    }
+    if (response.status === 404 && /no longer available|not found/i.test(detail)) {
+      const err = new Error(
+        `Gemini 모델 "${model}"을(를) 사용할 수 없습니다. Vercel의 GEMINI_MODEL 환경 변수를 gemini-3.1-flash-lite로 변경하거나 제거해 주세요.`,
+      )
+      err.code = 'GEMINI_MODEL_UNAVAILABLE'
       err.detail = detail.slice(0, 300)
       throw err
     }

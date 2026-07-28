@@ -6,7 +6,7 @@ import {
 
 const VALID_SLUGS = new Set([...MAIN_CATEGORY_SLUGS, 'uncategorized'])
 
-const DEFAULT_MODEL = 'gemini-2.0-flash-lite'
+const DEFAULT_MODEL = 'gemini-3.1-flash-lite'
 
 const FEW_SHOT_EXAMPLES = [
   {
