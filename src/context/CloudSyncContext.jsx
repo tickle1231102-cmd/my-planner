@@ -494,6 +494,7 @@ export function CloudSyncProvider({ children }) {
     setMandalaData(fresh.mandalaData)
     setMonthlyData(fresh.monthlyData)
     setMemoryData(fresh.memoryData)
+    setGoalPlanData(fresh.goalPlanData)
 
     syncWeeklyTodayRoute()
 
@@ -526,6 +527,7 @@ export function CloudSyncProvider({ children }) {
     setMandalaData(createDefaultMandalaData())
     setMonthlyData({})
     setMemoryData(createEmptyMemoryData())
+    setGoalPlanData(createEmptyGoalPlanData())
   }, [cloudEnabled, flushSave, localOnly, userKey])
 
   const deleteAccount = useCallback(async () => {
@@ -548,6 +550,7 @@ export function CloudSyncProvider({ children }) {
     setMandalaData(createDefaultMandalaData())
     setMonthlyData({})
     setMemoryData(createEmptyMemoryData())
+    setGoalPlanData(createEmptyGoalPlanData())
     setError('')
   }, [cloudEnabled, localOnly])
 
