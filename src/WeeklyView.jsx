@@ -30,6 +30,7 @@ import {
 } from './lib/timetableRoutines.js'
 import { buildChecklistDateKeys } from './lib/weeklyChecklist.js'
 import { syncWeeklyDoneToGoalPlan } from './lib/goalPlanWeeklySync.js'
+import { WeekGoalPlanSummary } from './components/GoalPlanPageSummaries.jsx'
 
 const DAY_LABELS = ['월', '화', '수', '목', '금', '토', '일']
 const START_HOUR = 6
@@ -1546,6 +1547,7 @@ function WeeklySidebarContent({
   setMemo,
   onOpenHabit,
   onSelectCalendarDate,
+  weekMonday,
 }) {
   return (
     <>
@@ -1606,6 +1608,13 @@ function WeeklySidebarContent({
           compact={compact}
           onUpdateGoal={handleWeekGoalUpdate}
         />
+        {weekMonday && (
+          <WeekGoalPlanSummary
+            weekMonday={weekMonday}
+            compact={compact}
+            className={compact ? 'mt-2' : 'mt-3'}
+          />
+        )}
       </div>
 
       <WeeklyHabitStrip days={days} compact={compact} onOpenHabit={onOpenHabit} />
@@ -1988,6 +1997,7 @@ export default function WeeklyView({
             setMemo={setMemo}
             onOpenHabit={handleOpenHabit}
             onSelectCalendarDate={handleSelectCalendarDate}
+            weekMonday={weekMonday}
           />
         </aside>
 
@@ -2014,6 +2024,7 @@ export default function WeeklyView({
               setMemo={setMemo}
               onOpenHabit={handleOpenHabit}
               onSelectCalendarDate={handleSelectCalendarDate}
+              weekMonday={weekMonday}
             />
           </aside>
           <SidebarEdgeToggle

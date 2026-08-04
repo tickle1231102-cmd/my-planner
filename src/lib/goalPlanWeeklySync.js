@@ -170,7 +170,55 @@ export function syncWeeklyDoneToGoalPlan(goalPlanData, taskId, done) {
     }),
   }))
 
-  return { goals }
+  return { ...goalPlanData, goals }
+}
+
+const goalTaskIdPrefix = (goalId) => `gd-${goalId}-`
+
+/** Remove all Weekly slots that belong to a given AI goal (gd-{goalId}-*). */
+export function removeGoalTasksFromWeekly(weeklyData, goalId) {
+  const prefix = goalTaskIdPrefix(goalId)
+  const next = { ...(weeklyData || {}) }
+  let changed = false
+
+  for (const [weekId, weekRaw] of Object.entries(next)) {
+    if (weekId.startsWith('__')) continue
+    const week = normalizeWeekForSync(weekRaw)
+    let weekChanged = false
+    const dayTasks = { ...week.dayTasks }
+
+    for (let dayIdx = 0; dayIdx < 7; dayIdx += 1) {
+      const tasks = [...dayTasks[dayIdx]]
+      let dayChanged = false
+      for (let i = 0; i < tasks.length; i += 1) {
+        if (!String(tasks[i].id || '').startsWith(prefix)) continue
+        tasks[i] = {
+          id: `task-${i}`,
+          text: '',
+          done: false,
+          postponed: false,
+        }
+        dayChanged = true
+      }
+      if (dayChanged) {
+        dayTasks[dayIdx] = tasks
+        weekChanged = true
+      }
+    }
+
+    if (weekChanged) {
+      next[weekId] = { ...week, dayTasks }
+      changed = true
+    }
+  }
+
+  return changed ? next : weeklyData
+}
+
+/** Clear old weekly slots for a goal, then fill empty slots with its daily tasks. */
+export function resyncGoalToWeekly(weeklyData, goal) {
+  const cleared = removeGoalTasksFromWeekly(weeklyData, goal.id)
+  return syncDailyTasksToWeekly(cleared, goal)
 }
 
 export function todayDateString(now = new Date()) {

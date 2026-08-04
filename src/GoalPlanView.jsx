@@ -2,8 +2,15 @@ import { useMemo, useState } from 'react'
 import { useCloudSync } from './context/CloudSyncContext.jsx'
 import { generateActionPlan } from './lib/goalPlanClient.js'
 import { SCOPE_LABELS, TASK_STATUS } from './lib/goalPlanSchema.js'
-import { buildStoredGoal } from './lib/goalPlanStorage.js'
+import { normalizeGoalPlanPreferences } from './lib/goalPlanDisplay.js'
 import {
+  buildStoredGoal,
+  goalInputFromStoredGoal,
+  previousPlanSnapshot,
+  rebuildStoredGoal,
+} from './lib/goalPlanStorage.js'
+import {
+  resyncGoalToWeekly,
   syncDailyTasksToWeekly,
   syncGoalTaskStatusToWeekly,
   todayDateString,
@@ -23,15 +30,28 @@ function defaultDates() {
   return { startDate: fmt(start), endDate: fmt(end) }
 }
 
-function GoalForm({ onCreated, disabled, busy, error }) {
+function GoalForm({
+  onCreated,
+  disabled,
+  busy,
+  error,
+  initialValues,
+  submitLabel = 'AI 플랜 생성',
+  revisionNotesLabel = '수정 요청 (선택)',
+}) {
   const defaults = defaultDates()
-  const [title, setTitle] = useState('')
-  const [description, setDescription] = useState('')
-  const [scope, setScope] = useState('SHORT_TERM')
-  const [startDate, setStartDate] = useState(defaults.startDate)
-  const [endDate, setEndDate] = useState(defaults.endDate)
-  const [excludedWeekdays, setExcludedWeekdays] = useState([0])
-  const [excludedDatesText, setExcludedDatesText] = useState('')
+  const [title, setTitle] = useState(initialValues?.title || '')
+  const [description, setDescription] = useState(initialValues?.description || '')
+  const [scope, setScope] = useState(initialValues?.scope || 'SHORT_TERM')
+  const [startDate, setStartDate] = useState(initialValues?.startDate || defaults.startDate)
+  const [endDate, setEndDate] = useState(initialValues?.endDate || defaults.endDate)
+  const [excludedWeekdays, setExcludedWeekdays] = useState(
+    initialValues?.excludedWeekdays ?? [0],
+  )
+  const [excludedDatesText, setExcludedDatesText] = useState(
+    (initialValues?.excludedDates || []).join(', '),
+  )
+  const [revisionNotes, setRevisionNotes] = useState('')
 
   function toggleWeekday(day) {
     setExcludedWeekdays((prev) =>
@@ -54,6 +74,7 @@ function GoalForm({ onCreated, disabled, busy, error }) {
       endDate,
       excludedWeekdays,
       excludedDates,
+      revisionNotes: revisionNotes.trim() || undefined,
     })
   }
 
@@ -166,6 +187,22 @@ function GoalForm({ onCreated, disabled, busy, error }) {
         />
       </label>
 
+      {revisionNotesLabel && (
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-planner-ink-muted">
+            {revisionNotesLabel}
+          </span>
+          <textarea
+            value={revisionNotes}
+            onChange={(e) => setRevisionNotes(e.target.value)}
+            rows={3}
+            disabled={disabled || busy}
+            placeholder="예: 주 3회 운동으로 줄이고, 주말은 완전 휴식. 월말까지 5kg 감량에 맞춰 조정."
+            className="w-full rounded-xl border border-planner-sand bg-white px-4 py-3 text-sm text-planner-ink outline-none focus:border-planner-sage focus:ring-2 focus:ring-planner-sage/20"
+          />
+        </label>
+      )}
+
       {error && (
         <p className="rounded-xl border border-planner-rose/30 bg-planner-rose-light px-3 py-2 text-sm text-planner-rose">
           {error}
@@ -177,14 +214,60 @@ function GoalForm({ onCreated, disabled, busy, error }) {
         disabled={disabled || busy}
         className="w-full rounded-full bg-planner-sage px-4 py-3 text-sm font-medium text-white transition hover:bg-planner-sage/90 disabled:opacity-50"
       >
-        {busy ? 'AI가 플랜을 만드는 중…' : 'AI 플랜 생성'}
+        {busy ? 'AI가 플랜을 만드는 중…' : submitLabel}
       </button>
     </form>
   )
 }
 
-function PlanDashboard({ goal, onToggleTask, onBack, onGoWeekly, syncMessage }) {
+function DisplayPreferencesPanel({ preferences, onChange }) {
+  const prefs = normalizeGoalPlanPreferences(preferences)
+  const toggles = [
+    { key: 'showOnYearPage', label: '연간 페이지에 표시' },
+    { key: 'showOnMonthPage', label: '월간 페이지에 표시' },
+    { key: 'showOnWeekPage', label: '주간 페이지에 표시' },
+  ]
+
+  return (
+    <div className="rounded-2xl border border-planner-sand bg-white p-4 shadow-soft">
+      <h3 className="text-sm font-medium text-planner-ink">플래너 연동 표시</h3>
+      <p className="mt-1 text-xs text-planner-ink-muted">
+        AI Plan 내용을 연·월·주간 플래너 페이지에 함께 보여줍니다.
+      </p>
+      <ul className="mt-3 space-y-2">
+        {toggles.map(({ key, label }) => (
+          <li key={key}>
+            <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-planner-sand/80 px-3 py-2.5 transition hover:bg-planner-warm/40">
+              <span className="text-sm text-planner-ink">{label}</span>
+              <input
+                type="checkbox"
+                checked={!!prefs[key]}
+                onChange={(event) =>
+                  onChange({ ...prefs, [key]: event.target.checked })
+                }
+                className="size-4 accent-planner-sage"
+              />
+            </label>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function PlanDashboard({
+  goal,
+  onToggleTask,
+  onBack,
+  onGoWeekly,
+  onRegenerate,
+  syncMessage,
+  busy,
+  canGenerate,
+}) {
   const [tab, setTab] = useState('summary')
+  const [editing, setEditing] = useState(false)
+  const [regenError, setRegenError] = useState('')
   const today = todayDateString()
 
   const completed = goal.dailyTasks.filter((t) => t.status === TASK_STATUS.COMPLETED).length
@@ -214,14 +297,57 @@ function PlanDashboard({ goal, onToggleTask, onBack, onGoWeekly, syncMessage }) 
         >
           ← 목록
         </button>
-        <button
-          type="button"
-          onClick={onGoWeekly}
-          className="rounded-full border border-planner-sage px-3 py-1.5 text-xs font-medium text-planner-sage transition hover:bg-planner-sage hover:text-white"
-        >
-          Weekly로 이동
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={onGoWeekly}
+            className="rounded-full border border-planner-sage px-3 py-1.5 text-xs font-medium text-planner-sage transition hover:bg-planner-sage hover:text-white"
+          >
+            Weekly로 이동
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setRegenError('')
+              setEditing((open) => !open)
+            }}
+            disabled={!canGenerate || busy}
+            className="rounded-full border border-planner-sand px-3 py-1.5 text-xs font-medium text-planner-ink-muted transition hover:border-planner-sage hover:text-planner-sage disabled:opacity-50"
+          >
+            {editing ? '수정 닫기' : '수정 · 재생성'}
+          </button>
+        </div>
       </div>
+
+      {editing && (
+        <div className="rounded-2xl border border-planner-sand bg-white p-5 shadow-soft">
+          <h3 className="text-sm font-medium text-planner-ink">플랜 수정 후 재생성</h3>
+          <p className="mt-1 text-xs text-planner-ink-muted">
+            목표·기간·수정 요청을 바꾼 뒤 AI가 플랜을 다시 만듭니다. Weekly에 반영된 할 일은
+            갱신됩니다.
+          </p>
+          <div className="mt-4">
+            <GoalForm
+              initialValues={goalInputFromStoredGoal(goal)}
+              onCreated={async (input) => {
+                setRegenError('')
+                try {
+                  await onRegenerate(input)
+                  setEditing(false)
+                } catch (err) {
+                  setRegenError(
+                    err instanceof Error ? err.message : '플랜 재생성 실패',
+                  )
+                }
+              }}
+              disabled={!canGenerate}
+              busy={busy}
+              error={regenError}
+              submitLabel={busy ? '재생성 중…' : 'AI 플랜 재생성'}
+            />
+          </div>
+        </div>
+      )}
 
       <div className="rounded-2xl border border-planner-sand bg-white p-5 shadow-soft">
         <h2 className="text-lg font-medium text-planner-ink">{goal.title}</h2>
@@ -404,23 +530,11 @@ export default function GoalPlanView({ onGoWeekly }) {
       const goal = buildStoredGoal(data.input, data.actionPlan)
 
       updateGoalPlan((prev) => ({
+        ...prev,
         goals: [goal, ...(prev.goals || [])],
       }))
 
-      let filled = 0
-      let skipped = 0
-      updateWeekly((prev) => {
-        const result = syncDailyTasksToWeekly(prev, goal)
-        filled = result.filled
-        skipped = result.skipped
-        return result.weeklyData
-      })
-      setSyncMessage(
-        skipped > 0
-          ? `Weekly에 ${filled}개 반영 · 슬롯 부족으로 ${skipped}개는 AI Plan에만 남김`
-          : `Weekly에 ${filled}개 할 일이 반영되었습니다`,
-      )
-
+      applyWeeklySync(goal, false)
       setSelectedId(goal.id)
       setMode('detail')
     } catch (err) {
@@ -428,6 +542,60 @@ export default function GoalPlanView({ onGoWeekly }) {
     } finally {
       setBusy(false)
     }
+  }
+
+  function applyWeeklySync(goal, replaceExisting) {
+    let filled = 0
+    let skipped = 0
+    updateWeekly((prev) => {
+      const result = replaceExisting
+        ? resyncGoalToWeekly(prev, goal)
+        : syncDailyTasksToWeekly(prev, goal)
+      filled = result.filled
+      skipped = result.skipped
+      return result.weeklyData
+    })
+    setSyncMessage(
+      replaceExisting
+        ? skipped > 0
+          ? `Weekly 갱신 · ${filled}개 반영 · 슬롯 부족 ${skipped}개`
+          : `Weekly에 ${filled}개 할 일이 갱신되었습니다`
+        : skipped > 0
+          ? `Weekly에 ${filled}개 반영 · 슬롯 부족으로 ${skipped}개는 AI Plan에만 남김`
+          : `Weekly에 ${filled}개 할 일이 반영되었습니다`,
+    )
+  }
+
+  async function handleRegenerate(input) {
+    if (!selected) throw new Error('선택된 플랜이 없습니다')
+    setBusy(true)
+    setSyncMessage('')
+    try {
+      const payload = {
+        ...input,
+        previousPlan: previousPlanSnapshot(selected),
+      }
+      const data = await generateActionPlan(payload)
+      const goal = rebuildStoredGoal(selected, data.input, data.actionPlan)
+
+      updateGoalPlan((prev) => ({
+        ...prev,
+        goals: (prev.goals || []).map((item) =>
+          item.id === selected.id ? goal : item,
+        ),
+      }))
+
+      applyWeeklySync(goal, true)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function handlePreferenceChange(preferences) {
+    updateGoalPlan((prev) => ({
+      ...prev,
+      preferences,
+    }))
   }
 
   function handleToggleTask(taskId) {
@@ -439,6 +607,7 @@ export default function GoalPlanView({ onGoWeekly }) {
     const nextCompleted = current.status !== TASK_STATUS.COMPLETED
 
     updateGoalPlan((prev) => ({
+      ...prev,
       goals: (prev.goals || []).map((goal) => {
         if (goal.id !== selectedId) return goal
         return {
@@ -462,6 +631,7 @@ export default function GoalPlanView({ onGoWeekly }) {
       return
     }
     updateGoalPlan((prev) => ({
+      ...prev,
       goals: (prev.goals || []).filter((g) => g.id !== goalId),
     }))
     if (selectedId === goalId) {
@@ -496,6 +666,7 @@ export default function GoalPlanView({ onGoWeekly }) {
               disabled={!canGenerate}
               busy={busy}
               error={error}
+              revisionNotesLabel={null}
             />
           </div>
         </div>
@@ -515,7 +686,10 @@ export default function GoalPlanView({ onGoWeekly }) {
             setSyncMessage('')
           }}
           onGoWeekly={onGoWeekly}
+          onRegenerate={handleRegenerate}
           syncMessage={syncMessage}
+          busy={busy}
+          canGenerate={canGenerate}
         />
       </div>
     )
@@ -541,6 +715,11 @@ export default function GoalPlanView({ onGoWeekly }) {
           + 새 플랜
         </button>
       </div>
+
+      <DisplayPreferencesPanel
+        preferences={goalPlanData?.preferences}
+        onChange={handlePreferenceChange}
+      />
 
       {goals.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-planner-sand bg-white p-10 text-center shadow-soft">

@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { formatDateLabel } from './lib/dateFormat.js'
 import { padMonthGoals, padYearGoals } from './lib/goalLists.js'
 import MonthGoalChecklist from './components/MonthGoalChecklist.jsx'
+import { YearGoalPlanSummary } from './components/GoalPlanPageSummaries.jsx'
 import { ImeSafeTextarea } from './components/ImeSafeTextarea.jsx'
 
 const MONTH_LABELS = [
@@ -125,6 +126,7 @@ export default function YearOverviewCalendar({
             placeholder="연간 목표"
             onUpdateGoal={onUpdateYearGoal}
           />
+          <YearGoalPlanSummary year={year} compact className="mt-3" />
           <div className="mt-3 border-t border-planner-sand pt-3">
             <h3 className="mb-2 text-center text-sm font-bold tracking-wide text-planner-ink">
               메모

@@ -1,6 +1,7 @@
 import { ZodError } from 'zod'
 import {
   ActionPlanOutputSchema,
+  GeneratePlanRequestSchema,
   GoalInputSchema,
 } from '../src/lib/goalPlanSchema.js'
 import {
@@ -60,7 +61,7 @@ function filterExcludedDailyTasks(actionPlan, input) {
 }
 
 function buildActionPlanPrompt(input) {
-  return [
+  const lines = [
     'You are an expert goal decomposition coach.',
     "Break the user's goal into a realistic, actionable hierarchy: yearly summaries, monthly themes, weekly focus goals, and daily tasks.",
     '',
@@ -71,6 +72,25 @@ function buildActionPlanPrompt(input) {
     `- Start date: ${input.startDate}`,
     `- End date: ${input.endDate}`,
     ...buildRestDayPromptLines(input),
+  ]
+
+  if (input.revisionNotes?.trim()) {
+    lines.push(
+      '',
+      'Revision request (apply these changes to the plan):',
+      input.revisionNotes.trim(),
+    )
+  }
+
+  if (input.previousPlan) {
+    lines.push(
+      '',
+      'Previous plan snapshot (use as reference; improve based on revision request):',
+      JSON.stringify(input.previousPlan),
+    )
+  }
+
+  lines.push(
     '',
     'Daily task strategy (maximize execution):',
     '- Break work into the smallest actionable units — each dailyTask should be one clear action completable in a single sitting.',
@@ -102,7 +122,9 @@ function buildActionPlanPrompt(input) {
         { date: 'YYYY-MM-DD', content: 'string', estimatedMin: 25 },
       ],
     }),
-  ].join('\n')
+  )
+
+  return lines.join('\n')
 }
 
 function resolveGeminiApiKey() {
@@ -190,7 +212,7 @@ export async function handlePlanGenerateRequest(body) {
 
   let input
   try {
-    input = GoalInputSchema.parse(body ?? {})
+    input = GeneratePlanRequestSchema.parse(body ?? {})
   } catch (error) {
     if (error instanceof ZodError) {
       return {

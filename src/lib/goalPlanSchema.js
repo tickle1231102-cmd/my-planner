@@ -49,6 +49,51 @@ export const GoalInputSchema = z
     },
   )
 
+/** Optional context when regenerating an existing plan. */
+export const PreviousPlanSchema = z.object({
+  summary: z.string().optional(),
+  yearlySummary: z
+    .array(z.object({ year: z.number().int(), summary: z.string() }))
+    .optional(),
+  monthlyBreakdown: z
+    .array(
+      z.object({
+        year: z.number().int(),
+        month: z.number().int().min(1).max(12),
+        theme: z.string(),
+      }),
+    )
+    .optional(),
+  weeklyBreakdown: z
+    .array(
+      z.object({
+        year: z.number().int(),
+        month: z.number().int().min(1).max(12),
+        weekNumber: z.number().int().min(1),
+        focusGoal: z.string(),
+      }),
+    )
+    .optional(),
+  dailyTasks: z
+    .array(
+      z.object({
+        date: dateStringSchema,
+        content: z.string(),
+        estimatedMin: z.number().int().positive().optional(),
+        status: z.string().optional(),
+      }),
+    )
+    .optional(),
+})
+
+/** Extends goal input with optional regenerate fields. */
+export const GeneratePlanRequestSchema = GoalInputSchema.and(
+  z.object({
+    revisionNotes: z.string().optional(),
+    previousPlan: PreviousPlanSchema.optional(),
+  }),
+)
+
 /** Validates structured LLM output for the action plan decomposition. */
 export const ActionPlanOutputSchema = z.object({
   summary: z.string(),

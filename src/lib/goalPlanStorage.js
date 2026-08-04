@@ -1,4 +1,5 @@
 import { getSavedUserKey, normalizeUserKey } from './userIdentity.js'
+import { DEFAULT_GOAL_PLAN_PREFERENCES, normalizeGoalPlanPreferences } from './goalPlanDisplay.js'
 import { TASK_STATUS } from './goalPlanSchema.js'
 
 export const GOAL_PLAN_STORAGE_KEY = 'goal-plan-v1'
@@ -10,7 +11,10 @@ export function goalPlanStorageKey(userKey) {
 }
 
 export function createEmptyGoalPlanData() {
-  return { goals: [] }
+  return {
+    goals: [],
+    preferences: { ...DEFAULT_GOAL_PLAN_PREFERENCES },
+  }
 }
 
 function normalizeDailyTask(task, index, goalId) {
@@ -76,6 +80,7 @@ export function normalizeGoalPlanData(raw) {
   if (!raw || !Array.isArray(raw.goals)) return createEmptyGoalPlanData()
   return {
     goals: raw.goals.map((goal, index) => normalizeGoal(goal, index)),
+    preferences: normalizeGoalPlanPreferences(raw.preferences),
   }
 }
 
@@ -133,23 +138,28 @@ export function clearAllGoalPlanData() {
   }
 }
 
-/** Build a stored goal from generate API output + user input. */
-export function buildStoredGoal(input, actionPlan) {
-  const id =
-    typeof crypto !== 'undefined' && crypto.randomUUID
-      ? crypto.randomUUID()
-      : `goal-${Date.now()}`
+function mapActionPlanTasks(goalId, actionPlan, previousTasks = []) {
+  const statusByKey = new Map()
+  for (const task of previousTasks) {
+    if (!task?.date) continue
+    statusByKey.set(`${task.date}::${task.content}`, task.status)
+  }
 
-  const dailyTasks = (actionPlan.dailyTasks || []).map((task, index) => ({
-    id: `gd-${id}-${task.date}-${index}`,
-    date: task.date,
-    content: task.content,
-    estimatedMin: task.estimatedMin,
-    status: TASK_STATUS.TODO,
-  }))
+  return (actionPlan.dailyTasks || []).map((task, index) => {
+    const status =
+      statusByKey.get(`${task.date}::${task.content}`) || TASK_STATUS.TODO
+    return {
+      id: `gd-${goalId}-${task.date}-${index}`,
+      date: task.date,
+      content: task.content,
+      estimatedMin: task.estimatedMin,
+      status,
+    }
+  })
+}
 
+function mapStoredPlanFields(input, actionPlan, base = {}) {
   return {
-    id,
     title: input.title,
     description: input.description || '',
     scope: input.scope,
@@ -157,7 +167,6 @@ export function buildStoredGoal(input, actionPlan) {
     endDate: input.endDate,
     excludedWeekdays: input.excludedWeekdays || [],
     excludedDates: input.excludedDates || [],
-    createdAt: new Date().toISOString(),
     summary: actionPlan.summary || '',
     yearlyPlans: (actionPlan.yearlySummary || []).map((item) => ({
       year: item.year,
@@ -174,7 +183,75 @@ export function buildStoredGoal(input, actionPlan) {
       weekNumber: item.weekNumber,
       focusGoal: item.focusGoal,
     })),
-    dailyTasks,
+    ...base,
+  }
+}
+
+/** Build a stored goal from generate API output + user input. */
+export function buildStoredGoal(input, actionPlan) {
+  const id =
+    typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `goal-${Date.now()}`
+
+  return {
+    id,
+    createdAt: new Date().toISOString(),
+    ...mapStoredPlanFields(input, actionPlan),
+    dailyTasks: mapActionPlanTasks(id, actionPlan),
+  }
+}
+
+/** Replace plan content on an existing goal (regenerate). Keeps id + createdAt. */
+export function rebuildStoredGoal(existingGoal, input, actionPlan) {
+  const goalId = existingGoal.id
+  return {
+    ...existingGoal,
+    ...mapStoredPlanFields(input, actionPlan, {
+      id: goalId,
+      createdAt: existingGoal.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }),
+    dailyTasks: mapActionPlanTasks(goalId, actionPlan, existingGoal.dailyTasks),
+  }
+}
+
+export function goalInputFromStoredGoal(goal) {
+  return {
+    title: goal.title,
+    description: goal.description || undefined,
+    scope: goal.scope,
+    startDate: goal.startDate,
+    endDate: goal.endDate,
+    excludedWeekdays: goal.excludedWeekdays || [],
+    excludedDates: goal.excludedDates || [],
+  }
+}
+
+export function previousPlanSnapshot(goal) {
+  return {
+    summary: goal.summary || '',
+    yearlySummary: (goal.yearlyPlans || []).map((item) => ({
+      year: item.year,
+      summary: item.summary,
+    })),
+    monthlyBreakdown: (goal.monthlyPlans || []).map((item) => ({
+      year: item.year,
+      month: item.month,
+      theme: item.theme,
+    })),
+    weeklyBreakdown: (goal.weeklyPlans || []).map((item) => ({
+      year: item.year,
+      month: item.month,
+      weekNumber: item.weekNumber,
+      focusGoal: item.focusGoal,
+    })),
+    dailyTasks: (goal.dailyTasks || []).map((task) => ({
+      date: task.date,
+      content: task.content,
+      estimatedMin: task.estimatedMin,
+      status: task.status,
+    })),
   }
 }
 

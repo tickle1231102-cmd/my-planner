@@ -6,6 +6,7 @@ import { CalendarIcon } from './components/CalendarIcon.jsx'
 import { PlannerQuickNav } from './components/PlannerQuickNav.jsx'
 import { AccountButton } from './components/AccountButton.jsx'
 import { PullToRefresh } from './components/PullToRefresh.jsx'
+import { MonthGoalPlanSummary } from './components/GoalPlanPageSummaries.jsx'
 import MonthGoalChecklist from './components/MonthGoalChecklist.jsx'
 import { useCloudSync } from './context/CloudSyncContext.jsx'
 import { padMonthGoals, padWeekGoals, padYearGoals } from './lib/goalLists.js'
@@ -607,6 +608,7 @@ export default function MonthlyView({
               month={month}
               onUpdateMonthGoal={onUpdateMonthGoal}
             />
+            <MonthGoalPlanSummary year={year} month={month} className="mt-2" />
           </div>
           <div className="mt-3">
             <MonthNotesSection
@@ -711,6 +713,7 @@ export default function MonthlyView({
               month={month}
               onUpdateMonthGoal={onUpdateMonthGoal}
             />
+            <MonthGoalPlanSummary year={year} month={month} compact />
           </aside>
 
           <MobileNotesCollapsible
