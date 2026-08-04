@@ -1,5 +1,6 @@
 export const APP_URL = '/app'
-export const SIGNUP_URL = '/app?signup=1'
+/** Landing CTAs open the app login gate (guest + Google), not the signup form. */
+export const SIGNUP_URL = '/app'
 
 export const NAV_LINKS = [
   { href: '#features', label: '기능' },
