@@ -1,5 +1,8 @@
 import { getSavedUserKey, normalizeUserKey } from './userIdentity.js'
-import { DEFAULT_GOAL_PLAN_PREFERENCES, normalizeGoalPlanPreferences } from './goalPlanDisplay.js'
+import {
+  DEFAULT_GOAL_LINK_SETTINGS,
+  normalizeGoalLinkSettings,
+} from './goalPlanDisplay.js'
 import { TASK_STATUS } from './goalPlanSchema.js'
 
 export const GOAL_PLAN_STORAGE_KEY = 'goal-plan-v1'
@@ -11,10 +14,7 @@ export function goalPlanStorageKey(userKey) {
 }
 
 export function createEmptyGoalPlanData() {
-  return {
-    goals: [],
-    preferences: { ...DEFAULT_GOAL_PLAN_PREFERENCES },
-  }
+  return { goals: [] }
 }
 
 function normalizeDailyTask(task, index, goalId) {
@@ -73,6 +73,8 @@ function normalizeGoal(raw, index) {
           normalizeDailyTask(task, taskIndex, id),
         )
       : [],
+    linkSettings: normalizeGoalLinkSettings(raw?.linkSettings),
+    linkedAt: raw?.linkedAt || null,
   }
 }
 
@@ -80,7 +82,6 @@ export function normalizeGoalPlanData(raw) {
   if (!raw || !Array.isArray(raw.goals)) return createEmptyGoalPlanData()
   return {
     goals: raw.goals.map((goal, index) => normalizeGoal(goal, index)),
-    preferences: normalizeGoalPlanPreferences(raw.preferences),
   }
 }
 
@@ -197,6 +198,8 @@ export function buildStoredGoal(input, actionPlan) {
   return {
     id,
     createdAt: new Date().toISOString(),
+    linkSettings: { ...DEFAULT_GOAL_LINK_SETTINGS },
+    linkedAt: null,
     ...mapStoredPlanFields(input, actionPlan),
     dailyTasks: mapActionPlanTasks(id, actionPlan),
   }
@@ -211,6 +214,8 @@ export function rebuildStoredGoal(existingGoal, input, actionPlan) {
       id: goalId,
       createdAt: existingGoal.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      linkSettings: existingGoal.linkSettings,
+      linkedAt: existingGoal.linkedAt,
     }),
     dailyTasks: mapActionPlanTasks(goalId, actionPlan, existingGoal.dailyTasks),
   }

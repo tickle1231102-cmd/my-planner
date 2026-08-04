@@ -1,11 +1,27 @@
 import { getWeekAssignment, parseDateOnly } from './goalPlanWeek.js'
 
+export const DEFAULT_GOAL_LINK_SETTINGS = {
+  showOnYearPage: false,
+  showOnMonthPage: false,
+  showOnWeekPage: false,
+}
+
+/** @deprecated Global prefs — kept for backward compat only. */
 export const DEFAULT_GOAL_PLAN_PREFERENCES = {
   showOnYearPage: true,
   showOnMonthPage: true,
   showOnWeekPage: true,
 }
 
+export function normalizeGoalLinkSettings(raw) {
+  return {
+    showOnYearPage: !!raw?.showOnYearPage,
+    showOnMonthPage: !!raw?.showOnMonthPage,
+    showOnWeekPage: !!raw?.showOnWeekPage,
+  }
+}
+
+/** @deprecated */
 export function normalizeGoalPlanPreferences(raw) {
   return {
     showOnYearPage:
@@ -21,6 +37,11 @@ export function normalizeGoalPlanPreferences(raw) {
         ? !!raw.showOnWeekPage
         : DEFAULT_GOAL_PLAN_PREFERENCES.showOnWeekPage,
   }
+}
+
+export function isGoalLinked(goal) {
+  const settings = normalizeGoalLinkSettings(goal?.linkSettings)
+  return settings.showOnYearPage || settings.showOnMonthPage || settings.showOnWeekPage
 }
 
 function goalOverlapsYear(goal, year) {
@@ -47,10 +68,8 @@ function goalOverlapsMonth(goal, year, monthIndex) {
 
 /** @returns {Array<{ goalId: string, title: string, summary: string }>} */
 export function getYearPlanSummaries(goalPlanData, year) {
-  const prefs = normalizeGoalPlanPreferences(goalPlanData?.preferences)
-  if (!prefs.showOnYearPage) return []
-
   return (goalPlanData?.goals || [])
+    .filter((goal) => normalizeGoalLinkSettings(goal.linkSettings).showOnYearPage)
     .map((goal) => {
       const yearly = (goal.yearlyPlans || []).find((item) => item.year === year)
       if (!yearly && !goalOverlapsYear(goal, year)) return null
@@ -65,11 +84,9 @@ export function getYearPlanSummaries(goalPlanData, year) {
 
 /** monthIndex: 0–11 (JS Date month) */
 export function getMonthPlanSummaries(goalPlanData, year, monthIndex) {
-  const prefs = normalizeGoalPlanPreferences(goalPlanData?.preferences)
-  if (!prefs.showOnMonthPage) return []
-
   const month = monthIndex + 1
   return (goalPlanData?.goals || [])
+    .filter((goal) => normalizeGoalLinkSettings(goal.linkSettings).showOnMonthPage)
     .map((goal) => {
       const monthly = (goal.monthlyPlans || []).find(
         (item) => item.year === year && item.month === month,
@@ -86,15 +103,13 @@ export function getMonthPlanSummaries(goalPlanData, year, monthIndex) {
 
 /** weekMonday: local Date (Monday 00:00) */
 export function getWeekPlanSummaries(goalPlanData, weekMonday) {
-  const prefs = normalizeGoalPlanPreferences(goalPlanData?.preferences)
-  if (!prefs.showOnWeekPage) return []
-
   const utcMonday = parseDateOnly(
     `${weekMonday.getFullYear()}-${String(weekMonday.getMonth() + 1).padStart(2, '0')}-${String(weekMonday.getDate()).padStart(2, '0')}`,
   )
   const { year, month, weekNumber } = getWeekAssignment(utcMonday)
 
   return (goalPlanData?.goals || [])
+    .filter((goal) => normalizeGoalLinkSettings(goal.linkSettings).showOnWeekPage)
     .map((goal) => {
       const weekly = (goal.weeklyPlans || []).find(
         (item) =>
@@ -115,12 +130,10 @@ export function getWeekPlanSummaries(goalPlanData, weekMonday) {
 
 /** Weekly focus goals for all weeks in a calendar month (for monthly grid). */
 export function getMonthWeeklyPlanSummaries(goalPlanData, year, monthIndex) {
-  const prefs = normalizeGoalPlanPreferences(goalPlanData?.preferences)
-  if (!prefs.showOnMonthPage) return []
-
   const month = monthIndex + 1
   const items = []
   for (const goal of goalPlanData?.goals || []) {
+    if (!normalizeGoalLinkSettings(goal.linkSettings).showOnMonthPage) continue
     for (const weekly of goal.weeklyPlans || []) {
       if (weekly.year !== year || weekly.month !== month) continue
       items.push({
